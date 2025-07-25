@@ -77,9 +77,9 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'elevatehire_db',
         'USER': 'postgres',
-        'PASSWORD': 'yourpassword',
+        'PASSWORD': 'Dinesh2002',
         'HOST': 'localhost',
-        'PORT': '5432',
+        'PORT': '5434',
     }
 }
 
