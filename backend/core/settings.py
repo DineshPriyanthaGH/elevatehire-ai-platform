@@ -88,11 +88,11 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'elevatehire_db',
-        'USER': 'postgres',
-        'PASSWORD': 'Dinesh2002',
-        'HOST': 'localhost',
-        'PORT': '5434',
+        'NAME': config('DB_NAME', default='elevatehire_db'),
+        'USER': config('DB_USER', default='postgres'),
+        'PASSWORD': config('DB_PASSWORD', default='Dinesh2002'),
+        'HOST': config('DB_HOST', default='db'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
