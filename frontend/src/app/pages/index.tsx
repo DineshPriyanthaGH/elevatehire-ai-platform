@@ -1,10 +1,10 @@
-import Header from "@/components/ui/header";
-import HeroCarousel from "@/components/ui/hero-carousel";
-import FeaturesSection from "@/components/ui/features-section";
-import HowItWorks from "@/components/ui/how-it-works";
-import Testimonials from "@/components/ui/testimonials";
-import PricingPreview from "@/components/ui/pricing-preview";
-import Footer from "@/components/ui/footer";
+import Header from "../components/landing/main/header";
+import HeroCarousel from "../components/landing/main/hero-carousel";
+import FeaturesSection from "../components/landing/main/features-section";
+import HowItWorks from "../components/landing/main/how-it-works";
+import Testimonials from "../components/landing/main/testimonials";
+import PricingPreview from "../components/landing/main/pricing-preview";
+import Footer from "../components/landing/main/footer";
 
 const Index = () => {
   return (
