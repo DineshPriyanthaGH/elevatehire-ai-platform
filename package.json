@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@types/react-router": "^5.1.20",
+    "lucide-react": "^0.526.0",
+    "react-router-dom": "^7.7.1"
+  }
+}
