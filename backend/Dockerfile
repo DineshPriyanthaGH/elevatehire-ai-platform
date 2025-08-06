@@ -14,6 +14,7 @@ RUN apt-get update \
         postgresql-client \
         build-essential \
         libpq-dev \
+        netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -23,14 +24,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . /app/
 
+# Copy and make entrypoint script executable
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Create media and static directories
 RUN mkdir -p /app/media /app/static
-
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
 
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Use the entrypoint script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
