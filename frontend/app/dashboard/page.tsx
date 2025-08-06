@@ -1,5 +1,7 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -76,6 +78,42 @@ const recentInterviews = [
 ]
 
 export default function DashboardPage() {
+  const [user, setUser] = useState(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    // Check authentication
+    const token = localStorage.getItem('access_token')
+    const userData = localStorage.getItem('user')
+    
+    if (!token) {
+      router.push('/auth')
+      return
+    }
+    
+    if (userData) {
+      setUser(JSON.parse(userData))
+    }
+  }, [router])
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    router.push('/')
+  }
+
+  if (!user) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-slate-300 border-t-slate-900 rounded-full mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 space-y-6 p-6">
       {/* Header */}
@@ -84,7 +122,7 @@ export default function DashboardPage() {
           <SidebarTrigger />
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-slate-600">Welcome back! Here's your recruitment overview.</p>
+            <p className="text-slate-600">Welcome back, {user.first_name}! Here's your recruitment overview.</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
@@ -95,6 +133,9 @@ export default function DashboardPage() {
           <Button className="bg-slate-900 hover:bg-slate-800">
             <Calendar className="w-4 h-4 mr-2" />
             Schedule Interview
+          </Button>
+          <Button variant="outline" onClick={handleLogout}>
+            Logout
           </Button>
         </div>
       </div>

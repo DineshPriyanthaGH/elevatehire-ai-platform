@@ -46,8 +46,13 @@ const heroImages = [
 
 export default function LandingPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('access_token')
+    setIsAuthenticated(!!token)
+    
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % heroImages.length)
     }, 4000)
@@ -157,16 +162,24 @@ export default function LandingPage() {
               >
                 Pricing
               </motion.a>
-              <Link href="/auth">
-                <Button variant="outline" className="mr-2 bg-transparent border-slate-300 hover:bg-slate-50">
-                  Login
-                </Button>
-              </Link>
-              <Link href="/auth">
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button className="bg-slate-900 hover:bg-slate-800 text-white">Get Started</Button>
-                </motion.div>
-              </Link>
+              {isAuthenticated ? (
+                <Link href="/dashboard">
+                  <Button className="bg-slate-900 hover:bg-slate-800 text-white">Dashboard</Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/auth">
+                    <Button variant="outline" className="mr-2 bg-transparent border-slate-300 hover:bg-slate-50">
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/auth">
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button className="bg-slate-900 hover:bg-slate-800 text-white">Get Started</Button>
+                    </motion.div>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
