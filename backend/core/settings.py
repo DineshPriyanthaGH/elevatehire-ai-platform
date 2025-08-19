@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'corsheaders',
     # Custom apps
     'authentication',
+    'candidates',
     'interviews',
     'analytics',
     'ai_analysis',
@@ -166,14 +167,20 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Production Mode Configuration
+PRODUCTION_MODE = config('PRODUCTION_MODE', default=False, cast=bool)
+
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.IsAuthenticated' if PRODUCTION_MODE else 'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 # JWT Configuration
