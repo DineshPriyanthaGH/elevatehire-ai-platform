@@ -21,6 +21,15 @@ import {
 } from "lucide-react"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
 
+// User type definition
+interface User {
+  id: number
+  email: string
+  first_name: string
+  last_name: string
+  username?: string
+}
+
 const monthlyData = [
   { month: "Jan", interviews: 45, hires: 12 },
   { month: "Feb", interviews: 52, hires: 15 },
@@ -78,7 +87,7 @@ const recentInterviews = [
 ]
 
 export default function DashboardPage() {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -122,7 +131,7 @@ export default function DashboardPage() {
           <SidebarTrigger />
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-slate-600">Welcome back, {user.first_name}! Here's your recruitment overview.</p>
+            <p className="text-slate-600">Welcome back, {user?.first_name || 'Recruiter'}! Here's your recruitment overview.</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">

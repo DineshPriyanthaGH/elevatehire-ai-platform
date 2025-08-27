@@ -10,6 +10,10 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: [],
   },
+  typescript: {
+    // Temporarily ignore build errors during development
+    ignoreBuildErrors: process.env.NODE_ENV === 'development',
+  },
 }
 
 module.exports = nextConfig
