@@ -36,6 +36,7 @@ services:
       - .env
     environment:
       - DEBUG=1
+      - PRODUCTION_MODE=false
       - DATABASE_URL=postgresql://postgres:priyantha2002@db:5432/elevatehire_db
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
@@ -62,6 +63,7 @@ services:
       - .env
     environment:
       - DEBUG=1
+      - PRODUCTION_MODE=false
       - DATABASE_URL=postgresql://postgres:priyantha2002@db:5432/elevatehire_db
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0

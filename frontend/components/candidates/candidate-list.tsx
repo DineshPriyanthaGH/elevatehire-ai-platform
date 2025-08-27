@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarInitials } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, Search, Filter, MoreHorizontal, Eye, Edit, Download, Trash2, Plus } from "lucide-react"
@@ -127,7 +127,12 @@ export default function CandidateList({
         })
         
         if (result.success && result.data) {
-          setCandidates(result.data.results || [])
+          setCandidates(
+            (result.data.results || []).map((candidate: any) => ({
+              ...candidate,
+              created_by_name: candidate.created_by_name ?? "",
+            }))
+          )
           setError(null)
         } else {
           // If API fails, try without authentication or use mock data

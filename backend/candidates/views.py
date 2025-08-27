@@ -68,12 +68,13 @@ class CandidateViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
-        """Set the creator when creating a candidate"""
-        # For testing - create a test user if no user is authenticated
-        if not self.request.user.is_authenticated:
+        """Create candidate with CV parsing and proper user handling"""
+        # Handle user assignment - create test user for development
+        user = self.request.user
+        if not user.is_authenticated:
             from django.contrib.auth import get_user_model
             User = get_user_model()
-            test_user, created = User.objects.get_or_create(
+            user, created = User.objects.get_or_create(
                 email='test@example.com',
                 defaults={
                     'is_active': True,
@@ -81,24 +82,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 }
             )
             if created:
-                test_user.set_password('testpass123')
-                test_user.save()
-            serializer.save(created_by=test_user)
-        else:
-            serializer.save(created_by=self.request.user)
-    
-    def get_serializer_class(self):
-        """Return appropriate serializer based on action"""
-        if self.action == 'create':
-            return CandidateCreateSerializer
-        elif self.action in ['retrieve', 'update', 'partial_update']:
-            return CandidateDetailSerializer
-        else:
-            return CandidateListSerializer
-    
-    def perform_create(self, serializer):
-        """Create candidate with CV parsing"""
-        candidate = serializer.save(created_by=self.request.user)
+                user.set_password('testpass123')
+                user.save()
+        
+        candidate = serializer.save(created_by=user)
         
         # Parse CV if uploaded
         if candidate.cv_file and CV_PARSING_AVAILABLE:
@@ -111,7 +98,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     candidate=candidate,
                     activity_type='note',
                     description=f"CV parsing failed: {str(e)}",
-                    performed_by=self.request.user
+                    performed_by=user
                 )
         
         # Log creation activity
@@ -119,8 +106,17 @@ class CandidateViewSet(viewsets.ModelViewSet):
             candidate=candidate,
             activity_type='status_change',
             description=f"Candidate created with status: {candidate.status}",
-            performed_by=self.request.user
+            performed_by=user
         )
+    
+    def get_serializer_class(self):
+        """Return appropriate serializer based on action"""
+        if self.action == 'create':
+            return CandidateCreateSerializer
+        elif self.action in ['retrieve', 'update', 'partial_update']:
+            return CandidateDetailSerializer
+        else:
+            return CandidateListSerializer
     
     def perform_update(self, serializer):
         """Update candidate and log changes"""
