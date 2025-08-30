@@ -108,6 +108,12 @@ DATABASES['default']['CONN_MAX_AGE'] = 600
 # Custom User Model
 AUTH_USER_MODEL = 'authentication.CustomUser'
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'authentication.backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

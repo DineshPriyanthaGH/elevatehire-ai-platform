@@ -245,24 +245,28 @@ export const authApi = {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email_or_username: email, password })
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || 'Login failed')
+        throw new Error(errorData.error || 'Login failed')
       }
 
-      const data = await response.json()
+      const result = await response.json()
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Login failed')
+      }
       
       // Store tokens in localStorage
       if (typeof window !== 'undefined') {
-        localStorage.setItem('access_token', data.access)
-        localStorage.setItem('refresh_token', data.refresh)
-        localStorage.setItem('user', JSON.stringify(data.user))
+        localStorage.setItem('access_token', result.tokens.access)
+        localStorage.setItem('refresh_token', result.tokens.refresh)
+        localStorage.setItem('user', JSON.stringify(result.user))
       }
 
-      return { success: true, data }
+      return { success: true, data: result.tokens }
     } catch (error) {
       console.error('Error logging in:', error)
       return { 

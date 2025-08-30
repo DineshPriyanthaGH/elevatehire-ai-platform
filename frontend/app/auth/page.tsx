@@ -19,7 +19,7 @@ export default function AuthPage() {
   const router = useRouter()
 
   const [loginData, setLoginData] = useState({
-    username: '',
+    email_or_username: '',
     password: ''
   })
 
@@ -156,13 +156,13 @@ export default function AuthPage() {
             {isLogin ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="email_or_username">Email or Username</Label>
                   <Input
-                    id="username"
-                    placeholder="Enter your username"
+                    id="email_or_username"
+                    placeholder="Enter your email or username"
                     className="border-slate-200 focus:border-slate-900"
-                    value={loginData.username}
-                    onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
+                    value={loginData.email_or_username}
+                    onChange={(e) => setLoginData({ ...loginData, email_or_username: e.target.value })}
                     required
                   />
                 </div>
