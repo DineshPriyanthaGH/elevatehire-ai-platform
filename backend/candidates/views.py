@@ -47,7 +47,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
-    filterset_fields = ['status', 'created_by', 'tags__name']
+    filterset_fields = ['status', 'added_by']
     search_fields = ['full_name', 'email', 'phone', 'skills', 'extracted_text']
     ordering_fields = ['created_at', 'updated_at', 'full_name', 'experience_years']
     ordering = ['-created_at']
@@ -85,7 +85,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 user.set_password('testpass123')
                 user.save()
         
-        candidate = serializer.save(created_by=user)
+        candidate = serializer.save(added_by=user)
         
         # Parse CV if uploaded
         if candidate.cv_file and CV_PARSING_AVAILABLE:
@@ -98,15 +98,15 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     candidate=candidate,
                     activity_type='note',
                     description=f"CV parsing failed: {str(e)}",
-                    performed_by=user
+                    user=user
                 )
         
         # Log creation activity
         CandidateActivity.objects.create(
             candidate=candidate,
-            activity_type='status_change',
+            activity_type='status_changed',
             description=f"Candidate created with status: {candidate.status}",
-            performed_by=user
+            user=user
         )
     
     def get_serializer_class(self):
@@ -127,9 +127,9 @@ class CandidateViewSet(viewsets.ModelViewSet):
         if old_status != candidate.status:
             CandidateActivity.objects.create(
                 candidate=candidate,
-                activity_type='status_change',
+                activity_type='status_changed',
                 description=f"Status changed from {old_status} to {candidate.status}",
-                performed_by=self.request.user
+                user=self.request.user
             )
     
     def parse_and_update_candidate(self, candidate):
@@ -209,7 +209,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     candidate=candidate,
                     activity_type='note',
                     description=f"CV parsed successfully. Confidence: {candidate.extraction_confidence:.2f}. Updated fields: {', '.join(update_fields)}",
-                    performed_by=candidate.created_by
+                    user=candidate.added_by
                 )
             
         except Exception as e:
@@ -259,7 +259,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
             candidate=candidate,
             activity_type='note',
             description=note,
-            performed_by=request.user
+            user=request.user
         )
         
         serializer = CandidateActivitySerializer(activity)
@@ -289,9 +289,9 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         CandidateActivity.objects.create(
             candidate=candidate,
-            activity_type='status_change',
+            activity_type='status_changed',
             description=description,
-            performed_by=request.user
+            user=request.user
         )
         
         serializer = self.get_serializer(candidate)
@@ -370,9 +370,9 @@ class CandidateViewSet(viewsets.ModelViewSet):
             
             CandidateActivity.objects.create(
                 candidate=candidate,
-                activity_type='status_change',
+                activity_type='status_changed',
                 description=description,
-                performed_by=request.user
+                user=request.user
             )
             updated_count += 1
         
@@ -413,12 +413,12 @@ class CandidateTagViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """Filter tags by current user"""
-        return CandidateTag.objects.filter(created_by=self.request.user)
+        """Return all tags"""
+        return CandidateTag.objects.all()
     
     def perform_create(self, serializer):
-        """Set the created_by field to current user"""
-        serializer.save(created_by=self.request.user)
+        """Create the tag"""
+        serializer.save()
 
 class CandidateActivityViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing candidate activities"""
@@ -426,13 +426,13 @@ class CandidateActivityViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CandidateActivitySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['candidate', 'activity_type', 'performed_by']
+    filterset_fields = ['candidate', 'activity_type', 'user']
     ordering = ['-created_at']
     
     def get_queryset(self):
         """Filter activities for candidates created by current user"""
         return CandidateActivity.objects.filter(
-            candidate__created_by=self.request.user
+            candidate__added_by=self.request.user
         )
 
 # Utility views for CV parsing status
