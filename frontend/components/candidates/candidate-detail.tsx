@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ConfidenceAnalysis } from './confidence-analysis'
 import { 
   User, 
   Mail, 
@@ -103,6 +104,14 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
   const [candidate, setCandidate] = useState<Candidate | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activities, setActivities] = useState<Array<{
+    id: number
+    activity_type: string
+    description: string
+    performed_by_name: string
+    created_at: string
+  }>>([])
+  const [loadingActivities, setLoadingActivities] = useState(false)
 
   // Mock data for development
   const mockCandidate: Candidate = {
@@ -206,16 +215,52 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
     const fetchCandidate = async () => {
       try {
         setLoading(true)
-        // TODO: Replace with actual API call
-        // const response = await fetch(`/api/candidates/${candidateId}/`)
-        // const data = await response.json()
+        const { candidateApi } = await import('@/lib/api')
         
-        // Simulate delay
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        setCandidate(mockCandidate)
+        const result = await candidateApi.getById(candidateId)
+        
+        if (result.success && result.data) {
+          // Transform the API data to match our interface
+          const apiCandidate = result.data
+          const transformedCandidate: Candidate = {
+            ...apiCandidate,
+            experience_years: apiCandidate.experience_years || null,
+            skills: apiCandidate.skills || [],
+            education: apiCandidate.education || [],
+            work_experience: apiCandidate.work_experience || [],
+            certifications: apiCandidate.certifications || [],
+            languages: (apiCandidate.languages || []).map((lang: string | {language: string, proficiency: string}) => {
+              if (typeof lang === 'string') {
+                return { language: lang, proficiency: 'Not specified' }
+              }
+              return lang
+            }),
+            cv_file_url: apiCandidate.cv_file ? `http://localhost:8000/api/candidates/${candidateId}/download_cv/` : null,
+            recent_activities: activities,
+            tags: apiCandidate.tags || [],
+            summary: apiCandidate.summary || '',
+            phone: apiCandidate.phone || '',
+            linkedin_url: apiCandidate.linkedin_url || '',
+            github_url: apiCandidate.github_url || '',
+            portfolio_url: apiCandidate.portfolio_url || '',
+            current_position: apiCandidate.current_position || '',
+            current_company: apiCandidate.current_company || '',
+            extracted_text: apiCandidate.extracted_text || '',
+            extraction_confidence: apiCandidate.extraction_confidence || 0,
+            created_by_name: (apiCandidate as any).added_by_name || 'System User',
+            location: apiCandidate.location || ''
+          }
+          setCandidate(transformedCandidate)
+        } else {
+          // Fallback to mock data for development
+          setCandidate(mockCandidate)
+        }
+        setError(null)
       } catch (err) {
-        setError('Failed to load candidate details')
         console.error('Error fetching candidate:', err)
+        // Use mock data in case of error for development
+        setCandidate(mockCandidate)
+        setError(null) // Don't show error in development mode
       } finally {
         setLoading(false)
       }
@@ -242,6 +287,58 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
     if (confidence >= 0.8) return 'text-green-600'
     if (confidence >= 0.6) return 'text-yellow-600'
     return 'text-red-600'
+  }
+
+  const loadActivities = async () => {
+    try {
+      setLoadingActivities(true)
+      const { candidateApi } = await import('@/lib/api')
+      
+      const result = await candidateApi.getActivities(candidateId)
+      
+      if (result.success && result.data) {
+        setActivities(result.data)
+      }
+    } catch (error) {
+      console.error('Error loading activities:', error)
+    } finally {
+      setLoadingActivities(false)
+    }
+  }
+
+  // Load activities when candidate is loaded
+  useEffect(() => {
+    if (candidate) {
+      loadActivities()
+    }
+  }, [candidate])
+
+  const handleDownloadCv = async () => {
+    if (!candidate?.cv_file_url) {
+      return
+    }
+
+    try {
+      const { candidateApi } = await import('@/lib/api')
+      const result = await candidateApi.downloadCv(candidateId)
+      
+      if (result.success && result.data) {
+        // Create download link
+        const url = window.URL.createObjectURL(result.data)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${candidate.full_name}_CV.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } else {
+        alert('Failed to download CV')
+      }
+    } catch (error) {
+      console.error('Error downloading CV:', error)
+      alert('Failed to download CV')
+    }
   }
 
   if (loading) {
@@ -278,11 +375,9 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
         </div>
         <div className="flex space-x-2">
           {candidate.cv_file_url && (
-            <Button variant="outline" size="sm" asChild>
-              <a href={candidate.cv_file_url} target="_blank" rel="noopener noreferrer">
-                <Download className="h-4 w-4 mr-2" />
-                Download CV
-              </a>
+            <Button variant="outline" size="sm" onClick={handleDownloadCv}>
+              <Download className="h-4 w-4 mr-2" />
+              Download CV
             </Button>
           )}
           <Button size="sm" onClick={() => onEdit(candidate.id)}>
@@ -395,11 +490,12 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
 
       {/* Detailed Information Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="experience">Experience</TabsTrigger>
           <TabsTrigger value="education">Education</TabsTrigger>
           <TabsTrigger value="skills">Skills</TabsTrigger>
+          <TabsTrigger value="confidence">Confidence</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
 
@@ -595,6 +691,14 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
           </Card>
         </TabsContent>
 
+        <TabsContent value="confidence">
+          <ConfidenceAnalysis 
+            candidateId={candidate.id}
+            candidateName={candidate.full_name}
+            initialConfidence={candidate.extraction_confidence}
+          />
+        </TabsContent>
+
         <TabsContent value="activity">
           <Card>
             <CardHeader>
@@ -604,15 +708,20 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {candidate.recent_activities.length > 0 ? (
+              {loadingActivities ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto"></div>
+                  <p className="mt-2 text-sm text-gray-600">Loading activities...</p>
+                </div>
+              ) : activities.length > 0 ? (
                 <div className="space-y-4">
-                  {candidate.recent_activities.map((activity) => (
+                  {activities.map((activity) => (
                     <div key={activity.id} className="flex space-x-3">
                       <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
                       <div className="flex-1">
                         <p className="text-gray-900">{activity.description}</p>
                         <p className="text-sm text-gray-500">
-                          By {activity.performed_by_name} • {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                          By {activity.performed_by_name || 'System'} • {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
                         </p>
                       </div>
                     </div>

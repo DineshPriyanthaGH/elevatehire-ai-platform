@@ -130,23 +130,19 @@ export default function CandidateList({
           setCandidates(
             (result.data.results || []).map((candidate: any) => ({
               ...candidate,
-              created_by_name: candidate.created_by_name ?? "",
+              created_by_name: candidate.added_by_name ?? candidate.created_by_name ?? "Unknown User",
             }))
           )
           setError(null)
         } else {
-          // If API fails, try without authentication or use mock data
-          console.log('API call failed, using mock data for development')
-          setCandidates(mockCandidates)
-          setError(null) // Don't show error in development mode
+          // Show error if API fails and user is authenticated
+          setError(result.error || 'Failed to load candidates')
+          setCandidates([])
         }
       } catch (err) {
         console.error('Error fetching candidates:', err)
-        
-        // Use mock data for development
-        console.log('Using mock data for development')
-        setCandidates(mockCandidates)
-        setError(null) // Don't show error in development
+        setError('Failed to connect to server. Please check your authentication.')
+        setCandidates([])
       } finally {
         setLoading(false)
       }
@@ -154,6 +150,32 @@ export default function CandidateList({
 
     fetchCandidates()
   }, [searchTerm, statusFilter, sortBy, sortOrder, refreshTrigger])
+
+  const handleDownloadCv = async (candidateId: string, candidateName: string) => {
+    try {
+      const { candidateApi } = await import('@/lib/api')
+      const result = await candidateApi.downloadCv(candidateId)
+      
+      if (result.success && result.data) {
+        // Create download link
+        const url = window.URL.createObjectURL(result.data)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${candidateName}_CV.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        
+        // No need for toast notification for downloads
+      } else {
+        throw new Error(result.error || 'Failed to download CV')
+      }
+    } catch (error) {
+      console.error('Error downloading CV:', error)
+      alert('Failed to download CV. The file may not be available.')
+    }
+  }
 
   const getStatusBadgeClass = (status: string) => {
     const statusConfig = CANDIDATE_STATUSES.find(s => s.value === status)
@@ -374,7 +396,7 @@ export default function CandidateList({
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadCv(candidate.id, candidate.full_name)}>
                           <Download className="mr-2 h-4 w-4" />
                           Download CV
                         </DropdownMenuItem>

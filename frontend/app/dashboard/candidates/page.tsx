@@ -7,6 +7,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import AddCandidateForm from '@/components/candidates/add-candidate-form'
 import CandidateList from '@/components/candidates/candidate-list'
 import CandidateDetail from '@/components/candidates/candidate-detail'
+import EditCandidateForm from '@/components/candidates/edit-candidate-form'
 import AuthComponent from '@/components/auth/AuthComponent'
 import { authApi } from '@/lib/api'
 
@@ -24,16 +25,8 @@ export default function CandidatesPage() {
   // Check authentication on mount
   useEffect(() => {
     const checkAuth = () => {
-      const isProduction = process.env.PRODUCTION_MODE === 'true'
-      
-      if (isProduction) {
-        // Production mode - require authentication
-        setIsAuthenticated(authApi.isAuthenticated())
-      } else {
-        // Development mode - allow access without authentication
-        setIsAuthenticated(true)
-      }
-      
+      // Always require authentication for candidate management
+      setIsAuthenticated(authApi.isAuthenticated())
       setAuthChecked(true)
     }
     checkAuth()
@@ -72,6 +65,32 @@ export default function CandidatesPage() {
     } catch (error) {
       console.error('Error deleting candidate:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to delete candidate')
+    }
+  }
+
+  const handleUpdateCandidate = async (formData: FormData) => {
+    if (!selectedCandidateId) return
+    
+    setLoading(true)
+    try {
+      const { candidateApi } = await import('@/lib/api')
+      
+      const result = await candidateApi.update(selectedCandidateId, formData)
+      
+      if (result.success) {
+        toast.success('Candidate updated successfully!')
+        setCurrentView('list')
+        setSelectedCandidateId(null)
+        setRefreshTrigger(prev => prev + 1) // Trigger refresh
+      } else {
+        throw new Error(result.error || 'Failed to update candidate')
+      }
+    } catch (error) {
+      console.error('Error updating candidate:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to update candidate')
+      throw error
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -166,18 +185,12 @@ export default function CandidatesPage() {
       )}
 
       {currentView === 'edit' && selectedCandidateId && (
-        <div>
-          {/* TODO: Create EditCandidateForm component */}
-          <div className="text-center py-8">
-            <p className="text-gray-600">Edit form coming soon...</p>
-            <button
-              onClick={handleBack}
-              className="mt-4 text-blue-600 hover:text-blue-800"
-            >
-              ← Back to candidates
-            </button>
-          </div>
-        </div>
+        <EditCandidateForm
+          candidateId={selectedCandidateId}
+          onSubmit={handleUpdateCandidate}
+          onCancel={handleBack}
+          loading={loading}
+        />
       )}
     </div>
   )

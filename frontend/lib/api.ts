@@ -20,7 +20,6 @@ const createHeaders = (includeAuth = true): HeadersInit => {
     if (token) {
       headers.Authorization = `Bearer ${token}`
     }
-    // For testing - don't require auth if no token available
   }
   
   return headers
@@ -45,6 +44,7 @@ export interface Candidate {
   experience_years?: number
   current_position?: string
   current_company?: string
+  location?: string
   linkedin_url?: string
   github_url?: string
   portfolio_url?: string
@@ -58,6 +58,7 @@ export interface Candidate {
   extraction_confidence?: number
   created_at: string
   updated_at: string
+  added_by_name?: string
   tags?: Array<{
     id: number
     name: string
@@ -192,6 +193,55 @@ export const candidateApi = {
     }
   },
 
+  // Update a candidate
+  async update(id: string, formData: FormData): Promise<ApiResponse<Candidate>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/candidates/${id}/`, {
+        method: 'PATCH',
+        headers: createHeaders(true),
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to update candidate')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error updating candidate:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Download candidate CV
+  async downloadCv(id: string): Promise<ApiResponse<Blob>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/candidates/${id}/download_cv/`, {
+        method: 'GET',
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to download CV')
+      }
+
+      const blob = await response.blob()
+      return { success: true, data: blob }
+    } catch (error) {
+      console.error('Error downloading CV:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
   // Delete a candidate
   async delete(id: string): Promise<ApiResponse<void>> {
     try {
@@ -207,6 +257,61 @@ export const candidateApi = {
       return { success: true }
     } catch (error) {
       console.error('Error deleting candidate:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get candidate activities
+  async getActivities(id: string): Promise<ApiResponse<Array<{
+    id: number
+    activity_type: string
+    description: string
+    performed_by_name: string
+    created_at: string
+  }>>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/candidates/${id}/activities/`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch candidate activities')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching activities:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Add note to candidate
+  async addNote(id: string, note: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/candidates/${id}/add_note/`, {
+        method: 'POST',
+        headers: {
+          ...createHeaders(true),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ note })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to add note')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error adding note:', error)
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 

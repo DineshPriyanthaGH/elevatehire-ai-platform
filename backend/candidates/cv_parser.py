@@ -278,13 +278,15 @@ class CVParser:
         experience_years = self.extract_experience_years(text)
         sections = self.extract_sections(text)
         
-        # Calculate confidence score
+        # Calculate confidence score and breakdown
         confidence = self.calculate_confidence(text, contact_info, name, skills)
+        confidence_breakdown = self.get_confidence_breakdown(text, contact_info, name, skills)
         
         # Prepare result
         result = {
             'extracted_text': text,
             'extraction_confidence': confidence,
+            'confidence_breakdown': confidence_breakdown,
             'full_name': name or '',
             'email': contact_info.get('email', ''),
             'phone': contact_info.get('phone', ''),
@@ -302,28 +304,493 @@ class CVParser:
         return result
     
     def calculate_confidence(self, text: str, contact_info: Dict, name: Optional[str], skills: List[str]) -> float:
-        """Calculate confidence score for extraction"""
-        confidence = 0.0
+        """Calculate comprehensive confidence score for extraction quality"""
+        confidence_metrics = {
+            'text_quality': 0.0,
+            'contact_completeness': 0.0,
+            'personal_info': 0.0,
+            'professional_content': 0.0,
+            'structure_recognition': 0.0,
+            'data_validation': 0.0
+        }
         
-        # Base confidence for having text
-        if text:
-            confidence += 0.2
+        # 1. Text Quality Assessment (25% weight)
+        text_quality_score = self._assess_text_quality(text)
+        confidence_metrics['text_quality'] = text_quality_score * 0.25
         
-        # Confidence for contact info
+        # 2. Contact Information Completeness (20% weight)
+        contact_score = self._assess_contact_completeness(contact_info)
+        confidence_metrics['contact_completeness'] = contact_score * 0.20
+        
+        # 3. Personal Information Extraction (15% weight)
+        personal_score = self._assess_personal_info(name, text)
+        confidence_metrics['personal_info'] = personal_score * 0.15
+        
+        # 4. Professional Content Detection (20% weight)
+        professional_score = self._assess_professional_content(skills, text)
+        confidence_metrics['professional_content'] = professional_score * 0.20
+        
+        # 5. Document Structure Recognition (10% weight)
+        structure_score = self._assess_document_structure(text)
+        confidence_metrics['structure_recognition'] = structure_score * 0.10
+        
+        # 6. Data Validation (10% weight)
+        validation_score = self._assess_data_validation(contact_info, text)
+        confidence_metrics['data_validation'] = validation_score * 0.10
+        
+        # Calculate total confidence
+        total_confidence = sum(confidence_metrics.values())
+        
+        # Apply penalties for common extraction issues
+        total_confidence = self._apply_extraction_penalties(total_confidence, text, contact_info)
+        
+        return min(1.0, max(0.0, total_confidence))
+    
+    def _assess_text_quality(self, text: str) -> float:
+        """Assess the quality of extracted text"""
+        if not text:
+            return 0.0
+        
+        score = 0.0
+        
+        # Length assessment
+        if len(text) > 500:
+            score += 0.3
+        elif len(text) > 200:
+            score += 0.2
+        elif len(text) > 50:
+            score += 0.1
+        
+        # Character quality (proper text vs garbage)
+        total_chars = len(text)
+        if total_chars > 0:
+            letter_chars = sum(1 for c in text if c.isalpha())
+            letter_ratio = letter_chars / total_chars
+            
+            if letter_ratio > 0.6:
+                score += 0.3
+            elif letter_ratio > 0.4:
+                score += 0.2
+            elif letter_ratio > 0.2:
+                score += 0.1
+        
+        # Word formation quality
+        words = text.split()
+        if words:
+            valid_words = sum(1 for word in words if len(word) > 1 and word.isalpha())
+            word_quality = valid_words / len(words)
+            
+            if word_quality > 0.7:
+                score += 0.2
+            elif word_quality > 0.5:
+                score += 0.15
+            elif word_quality > 0.3:
+                score += 0.1
+        
+        # Sentence structure
+        sentences = re.split(r'[.!?]+', text)
+        if len(sentences) > 3:
+            score += 0.2
+        elif len(sentences) > 1:
+            score += 0.1
+        
+        return min(1.0, score)
+    
+    def _assess_contact_completeness(self, contact_info: Dict) -> float:
+        """Assess completeness of contact information"""
+        score = 0.0
+        
+        # Email (most important)
         if contact_info.get('email'):
-            confidence += 0.3
+            email = contact_info['email']
+            if self._is_valid_email(email):
+                score += 0.5
+            else:
+                score += 0.2  # Partial credit for attempting extraction
+        
+        # Phone number
         if contact_info.get('phone'):
-            confidence += 0.2
+            phone = contact_info['phone']
+            if self._is_valid_phone(phone):
+                score += 0.3
+            else:
+                score += 0.1
         
-        # Confidence for name
+        # Professional URLs
+        if contact_info.get('linkedin_url'):
+            score += 0.1
+        
+        if contact_info.get('github_url'):
+            score += 0.1
+        
+        return min(1.0, score)
+    
+    def _assess_personal_info(self, name: Optional[str], text: str) -> float:
+        """Assess personal information extraction"""
+        score = 0.0
+        
+        # Name extraction
         if name:
-            confidence += 0.2
+            name_words = name.split()
+            if len(name_words) >= 2:  # First and last name
+                score += 0.6
+            elif len(name_words) == 1:
+                score += 0.3
+            
+            # Check if name appears reasonable
+            if all(word.isalpha() and word[0].isupper() for word in name_words):
+                score += 0.2
         
-        # Confidence for skills
+        # Location indicators
+        location_patterns = [
+            r'\b(city|state|country|address|location)\b',
+            r'\b\d{5}\b',  # ZIP codes
+            r'\b[A-Z]{2}\b',  # State abbreviations
+        ]
+        
+        for pattern in location_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                score += 0.1
+                break
+        
+        # Age or graduation year indicators
+        year_pattern = r'\b(19|20)\d{2}\b'
+        if re.search(year_pattern, text):
+            score += 0.1
+        
+        return min(1.0, score)
+    
+    def _assess_professional_content(self, skills: List[str], text: str) -> float:
+        """Assess professional content extraction"""
+        score = 0.0
+        
+        # Skills assessment
         if skills:
-            confidence += min(0.3, len(skills) * 0.05)
+            # Quantity bonus
+            if len(skills) >= 10:
+                score += 0.3
+            elif len(skills) >= 5:
+                score += 0.2
+            elif len(skills) >= 2:
+                score += 0.1
+            
+            # Quality assessment - check for diverse skill categories
+            skill_categories = {
+                'programming': ['python', 'javascript', 'java', 'c++', 'c#'],
+                'frameworks': ['react', 'angular', 'django', 'spring'],
+                'databases': ['mysql', 'postgresql', 'mongodb'],
+                'cloud': ['aws', 'azure', 'gcp', 'docker'],
+                'tools': ['git', 'jenkins', 'jira']
+            }
+            
+            categories_found = 0
+            for category, category_skills in skill_categories.items():
+                if any(skill.lower() in [s.lower() for s in skills] for skill in category_skills):
+                    categories_found += 1
+            
+            if categories_found >= 3:
+                score += 0.2
+            elif categories_found >= 2:
+                score += 0.1
         
-        return min(1.0, confidence)
+        # Professional keywords
+        professional_keywords = [
+            'experience', 'project', 'develop', 'manage', 'lead', 'implement',
+            'design', 'analyze', 'collaborate', 'responsible', 'achieve',
+            'improve', 'optimize', 'create', 'maintain', 'support'
+        ]
+        
+        keyword_count = sum(1 for keyword in professional_keywords 
+                          if keyword in text.lower())
+        
+        if keyword_count >= 8:
+            score += 0.3
+        elif keyword_count >= 5:
+            score += 0.2
+        elif keyword_count >= 3:
+            score += 0.1
+        
+        # Company or position indicators
+        position_patterns = [
+            r'\b(engineer|developer|manager|analyst|specialist|consultant|director)\b',
+            r'\b(senior|junior|lead|principal|chief)\b',
+            r'\b(software|web|data|system|network|security)\b'
+        ]
+        
+        position_matches = 0
+        for pattern in position_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                position_matches += 1
+        
+        if position_matches >= 3:
+            score += 0.2
+        elif position_matches >= 1:
+            score += 0.1
+        
+        return min(1.0, score)
+    
+    def _assess_document_structure(self, text: str) -> float:
+        """Assess how well document structure was recognized"""
+        score = 0.0
+        
+        # Section headers detected
+        sections_found = 0
+        for section_name, pattern in self.section_patterns.items():
+            if pattern.search(text):
+                sections_found += 1
+        
+        if sections_found >= 4:
+            score += 0.4
+        elif sections_found >= 3:
+            score += 0.3
+        elif sections_found >= 2:
+            score += 0.2
+        elif sections_found >= 1:
+            score += 0.1
+        
+        # Bullet points or lists
+        if re.search(r'[•\-\*]\s', text):
+            score += 0.2
+        
+        # Date patterns (education/experience dates)
+        date_patterns = [
+            r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b',
+            r'\b\d{1,2}/\d{4}\b',
+            r'\b\d{4}\s*-\s*\d{4}\b',
+            r'\b\d{4}\s*-\s*present\b'
+        ]
+        
+        date_matches = 0
+        for pattern in date_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                date_matches += 1
+        
+        if date_matches >= 2:
+            score += 0.3
+        elif date_matches >= 1:
+            score += 0.2
+        
+        # Academic degrees
+        degree_patterns = [
+            r'\b(bachelor|master|phd|doctorate|diploma|certificate)\b',
+            r'\b(b\.?s\.?|m\.?s\.?|b\.?a\.?|m\.?a\.?|ph\.?d\.?)\b'
+        ]
+        
+        for pattern in degree_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                score += 0.1
+                break
+        
+        return min(1.0, score)
+    
+    def _assess_data_validation(self, contact_info: Dict, text: str) -> float:
+        """Assess data validation and consistency"""
+        score = 0.0
+        
+        # Email validation
+        if contact_info.get('email'):
+            if self._is_valid_email(contact_info['email']):
+                score += 0.3
+        
+        # Phone validation
+        if contact_info.get('phone'):
+            if self._is_valid_phone(contact_info['phone']):
+                score += 0.3
+        
+        # URL validation
+        if contact_info.get('linkedin_url'):
+            if 'linkedin.com' in contact_info['linkedin_url'].lower():
+                score += 0.2
+        
+        if contact_info.get('github_url'):
+            if 'github.com' in contact_info['github_url'].lower():
+                score += 0.2
+        
+        return min(1.0, score)
+    
+    def _apply_extraction_penalties(self, confidence: float, text: str, contact_info: Dict) -> float:
+        """Apply penalties for common extraction issues"""
+        penalties = 0.0
+        
+        # Penalty for very short text (likely extraction failure)
+        if len(text) < 100:
+            penalties += 0.3
+        
+        # Penalty for no contact information
+        if not contact_info.get('email') and not contact_info.get('phone'):
+            penalties += 0.2
+        
+        # Penalty for garbage text (too many special characters)
+        if text:
+            special_char_ratio = sum(1 for c in text if not c.isalnum() and not c.isspace()) / len(text)
+            if special_char_ratio > 0.3:
+                penalties += 0.2
+        
+        # Penalty for repetitive content
+        words = text.split()
+        if len(words) > 10:
+            unique_words = set(words)
+            uniqueness_ratio = len(unique_words) / len(words)
+            if uniqueness_ratio < 0.3:
+                penalties += 0.15
+        
+        return confidence - penalties
+    
+    def _is_valid_email(self, email: str) -> bool:
+        """Validate email format"""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+    
+    def _is_valid_phone(self, phone: str) -> bool:
+        """Validate phone number format"""
+        # Remove all non-digit characters except +
+        clean_phone = re.sub(r'[^\d+]', '', phone)
+        
+        # Check if it's a reasonable phone number
+        if clean_phone.startswith('+'):
+            return len(clean_phone) >= 8 and len(clean_phone) <= 16
+        else:
+            return len(clean_phone) >= 7 and len(clean_phone) <= 15
+    
+    def get_confidence_breakdown(self, text: str, contact_info: Dict, name: Optional[str], skills: List[str]) -> Dict[str, Any]:
+        """Get detailed confidence breakdown for analysis"""
+        breakdown = {
+            'overall_confidence': self.calculate_confidence(text, contact_info, name, skills),
+            'metrics': {
+                'text_quality': {
+                    'score': self._assess_text_quality(text),
+                    'weight': 0.25,
+                    'weighted_score': self._assess_text_quality(text) * 0.25,
+                    'details': {
+                        'text_length': len(text),
+                        'character_quality': self._get_character_quality(text),
+                        'word_count': len(text.split()) if text else 0
+                    }
+                },
+                'contact_completeness': {
+                    'score': self._assess_contact_completeness(contact_info),
+                    'weight': 0.20,
+                    'weighted_score': self._assess_contact_completeness(contact_info) * 0.20,
+                    'details': {
+                        'email_found': bool(contact_info.get('email')),
+                        'phone_found': bool(contact_info.get('phone')),
+                        'linkedin_found': bool(contact_info.get('linkedin_url')),
+                        'github_found': bool(contact_info.get('github_url'))
+                    }
+                },
+                'personal_info': {
+                    'score': self._assess_personal_info(name, text),
+                    'weight': 0.15,
+                    'weighted_score': self._assess_personal_info(name, text) * 0.15,
+                    'details': {
+                        'name_extracted': bool(name),
+                        'name_quality': self._assess_name_quality(name) if name else 0
+                    }
+                },
+                'professional_content': {
+                    'score': self._assess_professional_content(skills, text),
+                    'weight': 0.20,
+                    'weighted_score': self._assess_professional_content(skills, text) * 0.20,
+                    'details': {
+                        'skills_count': len(skills),
+                        'professional_keywords': self._count_professional_keywords(text)
+                    }
+                },
+                'structure_recognition': {
+                    'score': self._assess_document_structure(text),
+                    'weight': 0.10,
+                    'weighted_score': self._assess_document_structure(text) * 0.10,
+                    'details': {
+                        'sections_found': self._count_sections_found(text),
+                        'dates_found': self._count_dates_found(text)
+                    }
+                },
+                'data_validation': {
+                    'score': self._assess_data_validation(contact_info, text),
+                    'weight': 0.10,
+                    'weighted_score': self._assess_data_validation(contact_info, text) * 0.10,
+                    'details': {
+                        'email_valid': self._is_valid_email(contact_info.get('email', '')),
+                        'phone_valid': self._is_valid_phone(contact_info.get('phone', ''))
+                    }
+                }
+            },
+            'penalties_applied': self._get_penalties_breakdown(text, contact_info),
+            'recommendations': self._get_improvement_recommendations(text, contact_info, name, skills)
+        }
+        
+        return breakdown
+    
+    def _get_character_quality(self, text: str) -> float:
+        """Get character quality ratio"""
+        if not text:
+            return 0.0
+        return sum(1 for c in text if c.isalpha()) / len(text)
+    
+    def _assess_name_quality(self, name: str) -> float:
+        """Assess quality of extracted name"""
+        if not name:
+            return 0.0
+        
+        words = name.split()
+        if len(words) >= 2 and all(word.isalpha() and word[0].isupper() for word in words):
+            return 1.0
+        elif len(words) == 1 and name.isalpha() and name[0].isupper():
+            return 0.6
+        else:
+            return 0.3
+    
+    def _count_professional_keywords(self, text: str) -> int:
+        """Count professional keywords in text"""
+        keywords = ['experience', 'project', 'develop', 'manage', 'lead', 'implement']
+        return sum(1 for keyword in keywords if keyword in text.lower())
+    
+    def _count_sections_found(self, text: str) -> int:
+        """Count sections found in text"""
+        return sum(1 for pattern in self.section_patterns.values() if pattern.search(text))
+    
+    def _count_dates_found(self, text: str) -> int:
+        """Count date patterns found in text"""
+        patterns = [r'\b\d{4}\b', r'\b\d{1,2}/\d{4}\b', r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b']
+        return sum(1 for pattern in patterns if re.search(pattern, text, re.IGNORECASE))
+    
+    def _get_penalties_breakdown(self, text: str, contact_info: Dict) -> Dict[str, float]:
+        """Get breakdown of penalties applied"""
+        penalties = {}
+        
+        if len(text) < 100:
+            penalties['short_text'] = 0.3
+        
+        if not contact_info.get('email') and not contact_info.get('phone'):
+            penalties['no_contact_info'] = 0.2
+        
+        if text:
+            special_char_ratio = sum(1 for c in text if not c.isalnum() and not c.isspace()) / len(text)
+            if special_char_ratio > 0.3:
+                penalties['high_special_chars'] = 0.2
+        
+        return penalties
+    
+    def _get_improvement_recommendations(self, text: str, contact_info: Dict, name: Optional[str], skills: List[str]) -> List[str]:
+        """Get recommendations for improving extraction"""
+        recommendations = []
+        
+        if len(text) < 200:
+            recommendations.append("CV text appears too short - consider checking file format or OCR quality")
+        
+        if not contact_info.get('email'):
+            recommendations.append("No email address found - verify email is present in CV")
+        
+        if not name:
+            recommendations.append("Name not detected - ensure name is clearly visible at top of CV")
+        
+        if len(skills) < 3:
+            recommendations.append("Few skills detected - verify skills section is properly formatted")
+        
+        if self._count_sections_found(text) < 2:
+            recommendations.append("Few document sections recognized - check CV structure and formatting")
+        
+        return recommendations
     
     def parse_education(self, education_text: str) -> List[Dict[str, str]]:
         """Parse education section"""

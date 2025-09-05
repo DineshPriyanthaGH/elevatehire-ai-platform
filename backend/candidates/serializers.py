@@ -23,44 +23,99 @@ class CandidateTagSerializer(serializers.ModelSerializer):
 
 class CandidateActivitySerializer(serializers.ModelSerializer):
     """Serializer for CandidateActivity model"""
-    performed_by_name = serializers.CharField(source='performed_by.get_full_name', read_only=True)
+    performed_by_name = serializers.CharField(source='user.get_full_name', read_only=True)
     
     class Meta:
         model = CandidateActivity
-        fields = ['id', 'activity_type', 'description', 'performed_by', 'performed_by_name', 'created_at']
+        fields = ['id', 'activity_type', 'description', 'user', 'performed_by_name', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 class CandidateListSerializer(serializers.ModelSerializer):
     """Serializer for listing candidates"""
     tags = CandidateTagSerializer(many=True, read_only=True)
-    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    added_by_name = serializers.CharField(source='added_by.get_full_name', read_only=True)
     
     class Meta:
         model = Candidate
         fields = [
             'id', 'full_name', 'email', 'phone', 'status', 'experience_years',
             'skills', 'current_position', 'current_company', 'extraction_confidence',
-            'created_at', 'updated_at', 'tags', 'created_by_name'
+            'created_at', 'updated_at', 'tags', 'added_by_name'
         ]
 
 class CandidateDetailSerializer(serializers.ModelSerializer):
-    """Serializer for candidate details"""
+    """Serializer for candidate details with all CV extracted information"""
     tags = CandidateTagSerializer(many=True, read_only=True)
-    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    added_by_name = serializers.CharField(source='added_by.get_full_name', read_only=True)
     cv_file_url = serializers.SerializerMethodField()
     recent_activities = serializers.SerializerMethodField()
+    skills = serializers.SerializerMethodField()
+    education = serializers.SerializerMethodField()
+    work_experience = serializers.SerializerMethodField()
+    certifications = serializers.SerializerMethodField()
+    languages = serializers.SerializerMethodField()
     
     class Meta:
         model = Candidate
         fields = [
-            'id', 'full_name', 'email', 'phone', 'status', 'summary',
-            'experience_years', 'skills', 'current_position', 'current_company',
-            'linkedin_url', 'github_url', 'portfolio_url', 'education',
-            'work_experience', 'certifications', 'languages', 'cv_file_url',
-            'extraction_confidence', 'extracted_text', 'created_at', 'updated_at',
-            'tags', 'created_by_name', 'recent_activities'
+            'id', 'first_name', 'last_name', 'full_name', 'email', 'phone', 'status', 
+            'summary', 'experience_years', 'skills', 'current_position', 'current_company',
+            'location', 'linkedin_url', 'github_url', 'portfolio_url', 'education',
+            'work_experience', 'certifications', 'languages', 'cv_file', 'cv_filename',
+            'cv_file_url', 'extraction_confidence', 'extracted_text', 'created_at', 
+            'updated_at', 'tags', 'added_by_name', 'recent_activities', 'rating', 'notes'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'extraction_confidence', 'extracted_text']
+    
+    def get_skills(self, obj):
+        """Parse skills from JSON field"""
+        skills = obj.skills
+        if isinstance(skills, str):
+            try:
+                return json.loads(skills)
+            except (json.JSONDecodeError, TypeError):
+                return skills.split(',') if skills else []
+        return skills if skills else []
+    
+    def get_education(self, obj):
+        """Parse education from JSON field"""
+        education = obj.education
+        if isinstance(education, str):
+            try:
+                return json.loads(education)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return education if education else []
+    
+    def get_work_experience(self, obj):
+        """Parse work experience from JSON field"""
+        experience = obj.work_experience
+        if isinstance(experience, str):
+            try:
+                return json.loads(experience)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return experience if experience else []
+    
+    def get_certifications(self, obj):
+        """Parse certifications from JSON field"""
+        certifications = obj.certifications
+        if isinstance(certifications, str):
+            try:
+                return json.loads(certifications)
+            except (json.JSONDecodeError, TypeError):
+                return certifications.split(',') if certifications else []
+        return certifications if certifications else []
+    
+    def get_languages(self, obj):
+        """Parse languages from JSON field"""
+        languages = obj.languages
+        if isinstance(languages, str):
+            try:
+                return json.loads(languages)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return languages if languages else []
     
     def get_cv_file_url(self, obj):
         """Get CV file URL"""
@@ -88,10 +143,14 @@ class CandidateCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidate
         fields = [
-            'full_name', 'email', 'phone', 'status', 'summary',
+            'id', 'full_name', 'email', 'phone', 'status', 'summary',
             'experience_years', 'skills', 'current_position', 'current_company',
-            'linkedin_url', 'github_url', 'portfolio_url', 'cv_file', 'tag_ids'
+            'location', 'linkedin_url', 'github_url', 'portfolio_url', 
+            'education', 'work_experience', 'certifications', 'languages',
+            'notes', 'rating', 'extracted_text', 'extraction_confidence',
+            'cv_file', 'tag_ids'
         ]
+        read_only_fields = ['id']
     
     def validate_cv_file(self, value):
         """Validate CV file upload"""
@@ -126,13 +185,26 @@ class CandidateCreateSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
-        """Create candidate with tags"""
+        """Create candidate with tags and proper JSON field handling"""
         tag_ids = validated_data.pop('tag_ids', [])
+        
+        # Handle JSON string fields
+        for field in ['skills', 'education', 'work_experience', 'certifications', 'languages']:
+            if field in validated_data and isinstance(validated_data[field], str):
+                try:
+                    validated_data[field] = json.loads(validated_data[field])
+                except (json.JSONDecodeError, TypeError):
+                    if field in ['skills', 'certifications']:
+                        # For skills and certifications, treat as comma-separated string
+                        validated_data[field] = [s.strip() for s in validated_data[field].split(',') if s.strip()]
+                    else:
+                        validated_data[field] = []
+        
         candidate = Candidate.objects.create(**validated_data)
         
         # Add tags
         if tag_ids:
-            tags = CandidateTag.objects.filter(id__in=tag_ids, created_by=validated_data['created_by'])
+            tags = CandidateTag.objects.filter(id__in=tag_ids, created_by=validated_data.get('added_by'))
             candidate.tags.set(tags)
         
         return candidate

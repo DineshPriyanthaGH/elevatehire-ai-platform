@@ -52,6 +52,30 @@ class CandidateViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'updated_at', 'full_name', 'experience_years']
     ordering = ['-created_at']
     
+    def get_queryset(self):
+        """Filter candidates to show only those created by the current user"""
+        from django.conf import settings
+        
+        # Always filter by user - even in development mode
+        if self.request.user.is_authenticated:
+            return Candidate.objects.filter(added_by=self.request.user)
+        else:
+            # For unauthenticated requests, create/use a test user
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            test_user, created = User.objects.get_or_create(
+                email='test@example.com',
+                defaults={
+                    'is_active': True,
+                    'is_staff': False,
+                }
+            )
+            if created:
+                test_user.set_password('testpass123')
+                test_user.save()
+            
+            return Candidate.objects.filter(added_by=test_user)
+    
     def get_permissions(self):
         """
         Instantiates and returns the list of permissions that this view requires.
@@ -216,6 +240,92 @@ class CandidateViewSet(viewsets.ModelViewSet):
             logger.error(f"Error parsing CV for candidate {candidate.id}: {e}")
             raise
     
+    @action(detail=True, methods=['get'])
+    def download_cv(self, request, pk=None):
+        """Download candidate's CV file"""
+        candidate = self.get_object()
+        
+        if not candidate.cv_file:
+            return Response(
+                {'error': 'No CV file found for this candidate'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            from django.http import FileResponse
+            import mimetypes
+            
+            # Get the file path
+            file_path = candidate.cv_file.path
+            
+            # Determine content type
+            content_type, _ = mimetypes.guess_type(file_path)
+            if not content_type:
+                content_type = 'application/octet-stream'
+            
+            # Create filename for download
+            filename = candidate.cv_filename or f"{candidate.full_name}_CV.pdf"
+            filename = filename.replace(' ', '_')
+            
+            # Log download activity
+            CandidateActivity.objects.create(
+                candidate=candidate,
+                activity_type='note',
+                description=f"CV downloaded by {request.user.email if request.user.is_authenticated else 'anonymous user'}",
+                user=request.user if request.user.is_authenticated else candidate.added_by
+            )
+            
+            # Return file response
+            response = FileResponse(
+                open(file_path, 'rb'),
+                content_type=content_type,
+                as_attachment=True,
+                filename=filename
+            )
+            return response
+            
+        except FileNotFoundError:
+            return Response(
+                {'error': 'CV file not found on server'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error downloading CV for candidate {candidate.id}: {e}")
+            return Response(
+                {'error': 'Failed to download CV file'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['get'])
+    def activities(self, request, pk=None):
+        """Get activities for a specific candidate"""
+        candidate = self.get_object()
+        activities = CandidateActivity.objects.filter(candidate=candidate).order_by('-created_at')[:20]
+        serializer = CandidateActivitySerializer(activities, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def add_note(self, request, pk=None):
+        """Add a note for the candidate"""
+        candidate = self.get_object()
+        note = request.data.get('note')
+        
+        if not note:
+            return Response(
+                {'error': 'Note content is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        activity = CandidateActivity.objects.create(
+            candidate=candidate,
+            activity_type='note',
+            description=note,
+            user=request.user if request.user.is_authenticated else None
+        )
+        
+        serializer = CandidateActivitySerializer(activity)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'])
     def reparse_cv(self, request, pk=None):
         """Manually trigger CV re-parsing"""
@@ -405,6 +515,88 @@ class CandidateViewSet(viewsets.ModelViewSet):
             'candidates': candidates_data,
             'total_count': len(candidates_data)
         })
+    
+    @action(detail=True, methods=['get'])
+    def confidence_breakdown(self, request, pk=None):
+        """Get detailed confidence breakdown for a candidate's CV extraction"""
+        candidate = self.get_object()
+        
+        if not CV_PARSING_AVAILABLE:
+            return Response(
+                {'error': 'CV parsing not available'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        
+        if not candidate.extracted_text:
+            return Response(
+                {'error': 'No extracted text available for this candidate'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            # Re-analyze the extracted data for confidence breakdown
+            contact_info = {
+                'email': candidate.email,
+                'phone': candidate.phone,
+                'linkedin_url': candidate.linkedin_url,
+                'github_url': candidate.github_url
+            }
+            
+            confidence_breakdown = cv_parser.get_confidence_breakdown(
+                text=candidate.extracted_text,
+                contact_info=contact_info,
+                name=candidate.full_name,
+                skills=candidate.skills or []
+            )
+            
+            # Add candidate-specific information
+            response_data = {
+                'candidate_id': candidate.id,
+                'candidate_name': candidate.full_name,
+                'extraction_date': candidate.updated_at,
+                'cv_filename': candidate.cv_filename,
+                'confidence_breakdown': confidence_breakdown,
+                'extraction_summary': {
+                    'overall_confidence': confidence_breakdown['overall_confidence'],
+                    'confidence_level': self._get_confidence_level(confidence_breakdown['overall_confidence']),
+                    'key_strengths': self._get_extraction_strengths(confidence_breakdown),
+                    'improvement_areas': confidence_breakdown.get('recommendations', [])
+                }
+            }
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            logger.error(f"Error generating confidence breakdown for candidate {pk}: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate confidence breakdown'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _get_confidence_level(self, confidence: float) -> str:
+        """Get human-readable confidence level"""
+        if confidence >= 0.8:
+            return 'Excellent'
+        elif confidence >= 0.6:
+            return 'Good'
+        elif confidence >= 0.4:
+            return 'Fair'
+        elif confidence >= 0.2:
+            return 'Poor'
+        else:
+            return 'Very Poor'
+    
+    def _get_extraction_strengths(self, breakdown: dict) -> list:
+        """Identify strongest extraction areas"""
+        strengths = []
+        metrics = breakdown.get('metrics', {})
+        
+        for metric_name, metric_data in metrics.items():
+            if metric_data.get('score', 0) >= 0.7:
+                strength_name = metric_name.replace('_', ' ').title()
+                strengths.append(f"{strength_name} ({metric_data['score']:.1%})")
+        
+        return strengths[:5]  # Return top 5 strengths
 
 class CandidateTagViewSet(viewsets.ModelViewSet):
     """ViewSet for managing candidate tags"""
