@@ -1,4 +1,4 @@
-// API utility functions for candidate management
+// API utility functions for candidate management and interview scheduling
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000/api'
 const PRODUCTION_MODE = process.env.PRODUCTION_MODE === 'true'
@@ -436,5 +436,443 @@ export const authApi = {
       return userStr ? JSON.parse(userStr) : null
     }
     return null
+  }
+}
+
+// Interview interfaces
+export interface Interview {
+  id: string
+  title: string
+  description?: string
+  candidate: string
+  candidate_name: string
+  candidate_email: string
+  candidate_phone?: string
+  interview_type: string
+  interview_type_name: string
+  interview_type_color: string
+  interviewer: string
+  interviewer_name: string
+  interviewer_email: string
+  additional_interviewers?: string[]
+  additional_interviewer_names?: string[]
+  scheduled_date: string
+  end_time: string
+  duration_minutes: number
+  meeting_type: string
+  meeting_link?: string
+  meeting_location?: string
+  meeting_id?: string
+  meeting_password?: string
+  status: string
+  priority: string
+  feedback?: string
+  rating?: number
+  outcome?: string
+  follow_up_required: boolean
+  follow_up_notes?: string
+  preparation_materials?: string
+  interview_questions?: string
+  created_by: string
+  created_by_name: string
+  created_at: string
+  updated_at: string
+  is_upcoming: boolean
+  is_today: boolean
+  is_overdue: boolean
+  time_until_interview?: string
+}
+
+export interface InterviewType {
+  id: string
+  name: string
+  description?: string
+  duration_minutes: number
+  color: string
+  is_active: boolean
+  created_at: string
+  interview_count?: number
+}
+
+export interface InterviewCalendarEvent {
+  id: string
+  title: string
+  start: string
+  end: string
+  backgroundColor: string
+  borderColor: string
+  textColor: string
+  candidate_name: string
+  interviewer_name: string
+  status: string
+  meeting_type: string
+  priority: string
+  url: string
+}
+
+export interface AvailableSlot {
+  interviewer_id: string
+  interviewer_name: string
+  date: string
+  start_time: string
+  end_time: string
+  available_duration: number
+}
+
+export interface CreateInterviewData {
+  title: string
+  description?: string
+  candidate: string
+  interview_type: string
+  interviewer: string
+  additional_interviewers?: string[]
+  scheduled_date: string
+  duration_minutes?: number
+  meeting_type: string
+  meeting_link?: string
+  meeting_location?: string
+  meeting_id?: string
+  meeting_password?: string
+  priority?: string
+  preparation_materials?: string
+  interview_questions?: string
+  send_reminders?: boolean
+}
+
+// Interview API
+export const interviewApi = {
+  // Get all interviews
+  async getAll(params?: {
+    status?: string
+    interviewer?: string
+    candidate?: string
+    start_date?: string
+    end_date?: string
+    upcoming?: boolean
+    page?: number
+    page_size?: number
+  }): Promise<ApiResponse<{ results: Interview[], count: number }>> {
+    try {
+      const queryParams = new URLSearchParams()
+      
+      if (params?.status) queryParams.append('status', params.status)
+      if (params?.interviewer) queryParams.append('interviewer', params.interviewer)
+      if (params?.candidate) queryParams.append('candidate', params.candidate)
+      if (params?.start_date) queryParams.append('start_date', params.start_date)
+      if (params?.end_date) queryParams.append('end_date', params.end_date)
+      if (params?.upcoming) queryParams.append('upcoming', 'true')
+      if (params?.page) queryParams.append('page', params.page.toString())
+      if (params?.page_size) queryParams.append('page_size', params.page_size.toString())
+
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/?${queryParams}`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interviews')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching interviews:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get calendar events
+  async getCalendarEvents(start?: string, end?: string): Promise<ApiResponse<InterviewCalendarEvent[]>> {
+    try {
+      const queryParams = new URLSearchParams()
+      if (start) queryParams.append('start', start)
+      if (end) queryParams.append('end', end)
+
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/calendar_events/?${queryParams}`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch calendar events')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching calendar events:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Create a new interview
+  async create(interviewData: CreateInterviewData): Promise<ApiResponse<Interview>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/`, {
+        method: 'POST',
+        headers: {
+          ...createHeaders(true),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(interviewData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to create interview')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error creating interview:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get interview by ID
+  async getById(id: string): Promise<ApiResponse<Interview>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interview')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching interview:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Update interview
+  async update(id: string, updateData: Partial<CreateInterviewData>): Promise<ApiResponse<Interview>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/`, {
+        method: 'PATCH',
+        headers: {
+          ...createHeaders(true),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to update interview')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error updating interview:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Cancel interview
+  async cancel(id: string, reason?: string): Promise<ApiResponse<Interview>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/cancel/`, {
+        method: 'POST',
+        headers: {
+          ...createHeaders(true),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to cancel interview')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error cancelling interview:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Complete interview
+  async complete(id: string, notes?: string): Promise<ApiResponse<Interview>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/complete/`, {
+        method: 'POST',
+        headers: {
+          ...createHeaders(true),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to complete interview')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error completing interview:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get interview types
+  async getTypes(): Promise<ApiResponse<InterviewType[]>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interview-types/`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interview types')
+      }
+
+      const data = await response.json()
+      return { success: true, data: data.results || data }
+    } catch (error) {
+      console.error('Error fetching interview types:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get available slots
+  async getAvailableSlots(params: {
+    interviewer_id: string
+    start_date: string
+    end_date: string
+    duration?: number
+  }): Promise<ApiResponse<AvailableSlot[]>> {
+    try {
+      const queryParams = new URLSearchParams()
+      queryParams.append('interviewer_id', params.interviewer_id)
+      queryParams.append('start_date', params.start_date)
+      queryParams.append('end_date', params.end_date)
+      if (params.duration) queryParams.append('duration', params.duration.toString())
+
+      const response = await fetch(`${API_BASE_URL}/interviews/api/availability/available_slots/?${queryParams}`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch available slots')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching available slots:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get interviewers list
+  async getInterviewers(search?: string): Promise<ApiResponse<Array<{
+    id: string
+    username: string
+    first_name: string
+    last_name: string
+    full_name: string
+    email: string
+  }>>> {
+    try {
+      const queryParams = new URLSearchParams()
+      if (search) queryParams.append('search', search)
+
+      const response = await fetch(`${API_BASE_URL}/auth/users/?${queryParams}`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interviewers')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching interviewers:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  }
+}
+
+// Export default API object
+export const api = {
+  get: async (endpoint: string) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: createHeaders(true)
+    })
+    if (!response.ok) throw new Error('API request failed')
+    return response.json()
+  },
+  
+  post: async (endpoint: string, data: any) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        ...createHeaders(true),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) throw new Error('API request failed')
+    return response.json()
+  },
+
+  patch: async (endpoint: string, data: any) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PATCH',
+      headers: {
+        ...createHeaders(true),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) throw new Error('API request failed')
+    return response.json()
+  },
+
+  delete: async (endpoint: string) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'DELETE',
+      headers: createHeaders(true)
+    })
+    if (!response.ok) throw new Error('API request failed')
+    return response.json()
   }
 }
