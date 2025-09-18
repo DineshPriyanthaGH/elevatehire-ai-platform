@@ -31,15 +31,15 @@ class InterviewFeedbackInline(admin.StackedInline):
     model = InterviewFeedback
     extra = 0
     fields = [
-        'overall_rating', 'technical_skills', 'communication_skills',
-        'problem_solving', 'cultural_fit', 'strengths', 'areas_for_improvement',
-        'recommendation', 'detailed_feedback'
+        'overall_rating', 'technical_skills_rating', 'communication_rating',
+        'problem_solving_rating', 'cultural_fit_rating', 'strengths', 'weaknesses',
+        'recommendation', 'additional_comments'
     ]
 
 class InterviewReminderInline(admin.TabularInline):
     model = InterviewReminder
     extra = 0
-    fields = ['reminder_type', 'send_at', 'sent', 'message']
+    fields = ['reminder_type', 'scheduled_time', 'sent']
     readonly_fields = ['sent']
 
 @admin.register(Interview)
@@ -75,7 +75,7 @@ class InterviewAdmin(admin.ModelAdmin):
             'fields': ('status', 'priority', 'rating')
         }),
         ('Additional Information', {
-            'fields': ('feedback', 'notes'),
+            'fields': ('feedback', 'follow_up_notes'),
             'classes': ('collapse',)
         }),
         ('System Information', {
@@ -141,7 +141,7 @@ class InterviewAvailabilityAdmin(admin.ModelAdmin):
         'is_active', 'is_unavailable'
     ]
     list_filter = ['day_of_week', 'is_active', 'is_unavailable', 'interviewer']
-    search_fields = ['interviewer__first_name', 'interviewer__last_name', 'notes']
+    search_fields = ['interviewer__first_name', 'interviewer__last_name']
     ordering = ['interviewer', 'day_of_week', 'start_time']
     
     fieldsets = (
@@ -152,7 +152,7 @@ class InterviewAvailabilityAdmin(admin.ModelAdmin):
             'fields': ('start_time', 'end_time')
         }),
         ('Settings', {
-            'fields': ('is_active', 'is_unavailable', 'notes')
+            'fields': ('is_active', 'is_unavailable')
         })
     )
     
@@ -179,7 +179,7 @@ class InterviewTemplateAdmin(admin.ModelAdmin):
             'fields': ('name', 'description', 'interview_type', 'is_default')
         }),
         ('Content', {
-            'fields': ('questions', 'evaluation_criteria', 'notes')
+            'fields': ('questions', 'preparation_materials')
         }),
         ('System Information', {
             'fields': ('created_by', 'created_at'),
@@ -194,15 +194,15 @@ class InterviewTemplateAdmin(admin.ModelAdmin):
 class InterviewFeedbackAdmin(admin.ModelAdmin):
     list_display = [
         'interview', 'overall_rating', 'recommendation',
-        'technical_skills', 'communication_skills', 'created_at'
+        'technical_skills_rating', 'communication_rating', 'created_at'
     ]
     list_filter = [
-        'overall_rating', 'recommendation', 'technical_skills',
-        'communication_skills', 'problem_solving', 'cultural_fit'
+        'overall_rating', 'recommendation', 'technical_skills_rating',
+        'communication_rating', 'problem_solving_rating', 'cultural_fit_rating'
     ]
     search_fields = [
         'interview__title', 'interview__candidate__full_name',
-        'strengths', 'areas_for_improvement', 'detailed_feedback'
+        'strengths', 'weaknesses', 'additional_comments'
     ]
     ordering = ['-created_at']
     
@@ -212,12 +212,12 @@ class InterviewFeedbackAdmin(admin.ModelAdmin):
         }),
         ('Ratings', {
             'fields': (
-                'overall_rating', 'technical_skills', 'communication_skills',
-                'problem_solving', 'cultural_fit'
+                'overall_rating', 'technical_skills_rating', 'communication_rating',
+                'problem_solving_rating', 'cultural_fit_rating'
             )
         }),
         ('Feedback', {
-            'fields': ('strengths', 'areas_for_improvement', 'detailed_feedback')
+            'fields': ('strengths', 'weaknesses', 'additional_comments')
         }),
         ('Recommendation', {
             'fields': ('recommendation',)
@@ -233,21 +233,17 @@ class InterviewFeedbackAdmin(admin.ModelAdmin):
 @admin.register(InterviewReminder)
 class InterviewReminderAdmin(admin.ModelAdmin):
     list_display = [
-        'interview', 'reminder_type', 'send_at', 'sent_status', 'created_at'
+        'interview', 'reminder_type', 'scheduled_time', 'sent_status', 'created_at'
     ]
-    list_filter = ['reminder_type', 'sent', 'send_at']
+    list_filter = ['reminder_type', 'sent', 'scheduled_time']
     search_fields = [
-        'interview__title', 'interview__candidate__full_name',
-        'message'
+        'interview__title', 'interview__candidate__full_name'
     ]
-    ordering = ['-send_at']
+    ordering = ['-scheduled_time']
     
     fieldsets = (
         ('Reminder Information', {
-            'fields': ('interview', 'reminder_type', 'send_at')
-        }),
-        ('Message', {
-            'fields': ('message',)
+            'fields': ('interview', 'recipient', 'reminder_type', 'scheduled_time')
         }),
         ('Status', {
             'fields': ('sent', 'sent_at'),
@@ -263,7 +259,7 @@ class InterviewReminderAdmin(admin.ModelAdmin):
                 '<span style="color: green;">✓ Sent at {}</span>',
                 obj.sent_at.strftime('%Y-%m-%d %H:%M') if obj.sent_at else 'Unknown'
             )
-        elif obj.send_at and obj.send_at < timezone.now():
+        elif obj.scheduled_time and obj.scheduled_time < timezone.now():
             return format_html('<span style="color: red;">✗ Failed</span>')
         else:
             return format_html('<span style="color: orange;">⏳ Pending</span>')
