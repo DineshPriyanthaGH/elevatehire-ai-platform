@@ -248,7 +248,7 @@ export default function CandidateDetail({ candidateId, onBack, onEdit }: Candida
             extracted_text: apiCandidate.extracted_text || '',
             extraction_confidence: apiCandidate.extraction_confidence || 0,
             created_by_name: (apiCandidate as any).added_by_name || 'System User',
-            location: apiCandidate.location || ''
+            ...(apiCandidate.location && { location: apiCandidate.location })
           }
           setCandidate(transformedCandidate)
         } else {
