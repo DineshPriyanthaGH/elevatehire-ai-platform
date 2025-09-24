@@ -1,343 +1,196 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import {
-  Search,
-  Filter,
-  Plus,
-  MoreHorizontal,
-  Mail,
-  Phone,
-  MapPin,
-  Star,
-  Calendar,
-  Eye,
-  Edit,
-  Trash2,
-} from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import AddCandidateForm from '@/components/candidates/add-candidate-form'
+import CandidateList from '@/components/candidates/candidate-list'
+import CandidateDetail from '@/components/candidates/candidate-detail'
+import EditCandidateForm from '@/components/candidates/edit-candidate-form'
+import AuthComponent from '@/components/auth/AuthComponent'
+import { authApi } from '@/lib/api'
 
-const candidates = [
-  {
-    id: 1,
-    name: "Sarah Johnson",
-    email: "sarah.johnson@email.com",
-    phone: "+1 (555) 123-4567",
-    position: "Senior Frontend Developer",
-    location: "San Francisco, CA",
-    status: "active",
-    score: 92,
-    experience: "5+ years",
-    skills: ["React", "TypeScript", "Node.js"],
-    lastInterview: "2024-01-15",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 2,
-    name: "Michael Chen",
-    email: "michael.chen@email.com",
-    phone: "+1 (555) 234-5678",
-    position: "Product Manager",
-    location: "New York, NY",
-    status: "interviewed",
-    score: 88,
-    experience: "7+ years",
-    skills: ["Strategy", "Analytics", "Leadership"],
-    lastInterview: "2024-01-14",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 3,
-    name: "Emily Rodriguez",
-    email: "emily.rodriguez@email.com",
-    phone: "+1 (555) 345-6789",
-    position: "UX Designer",
-    location: "Austin, TX",
-    status: "hired",
-    score: 95,
-    experience: "4+ years",
-    skills: ["Figma", "User Research", "Prototyping"],
-    lastInterview: "2024-01-12",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 4,
-    name: "David Kim",
-    email: "david.kim@email.com",
-    phone: "+1 (555) 456-7890",
-    position: "Data Scientist",
-    location: "Seattle, WA",
-    status: "scheduled",
-    score: 85,
-    experience: "6+ years",
-    skills: ["Python", "Machine Learning", "SQL"],
-    lastInterview: "2024-01-16",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 5,
-    name: "Lisa Wang",
-    email: "lisa.wang@email.com",
-    phone: "+1 (555) 567-8901",
-    position: "Backend Developer",
-    location: "Los Angeles, CA",
-    status: "active",
-    score: 90,
-    experience: "3+ years",
-    skills: ["Java", "Spring", "AWS"],
-    lastInterview: "2024-01-13",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 6,
-    name: "James Wilson",
-    email: "james.wilson@email.com",
-    phone: "+1 (555) 678-9012",
-    position: "DevOps Engineer",
-    location: "Chicago, IL",
-    status: "rejected",
-    score: 72,
-    experience: "4+ years",
-    skills: ["Docker", "Kubernetes", "CI/CD"],
-    lastInterview: "2024-01-11",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-]
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "active":
-      return "bg-blue-100 text-blue-700"
-    case "interviewed":
-      return "bg-yellow-100 text-yellow-700"
-    case "hired":
-      return "bg-green-100 text-green-700"
-    case "scheduled":
-      return "bg-purple-100 text-purple-700"
-    case "rejected":
-      return "bg-red-100 text-red-700"
-    default:
-      return "bg-gray-100 text-gray-700"
-  }
-}
-
-const getScoreColor = (score: number) => {
-  if (score >= 90) return "text-green-600"
-  if (score >= 80) return "text-blue-600"
-  if (score >= 70) return "text-yellow-600"
-  return "text-red-600"
-}
+type View = 'list' | 'add' | 'detail' | 'edit'
 
 export default function CandidatesPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [positionFilter, setPositionFilter] = useState("all")
+  const [currentView, setCurrentView] = useState<View>('list')
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+  const router = useRouter()
 
-  const filteredCandidates = candidates.filter((candidate) => {
-    const matchesSearch =
-      candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      candidate.position.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || candidate.status === statusFilter
-    const matchesPosition = positionFilter === "all" || candidate.position.includes(positionFilter)
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = () => {
+      // Always require authentication for candidate management
+      setIsAuthenticated(authApi.isAuthenticated())
+      setAuthChecked(true)
+    }
+    checkAuth()
+  }, [])
 
-    return matchesSearch && matchesStatus && matchesPosition
-  })
+  const handleAddCandidate = () => {
+    setCurrentView('add')
+  }
+
+  const handleViewCandidate = (id: string) => {
+    setSelectedCandidateId(id)
+    setCurrentView('detail')
+  }
+
+  const handleEditCandidate = (id: string) => {
+    setSelectedCandidateId(id)
+    setCurrentView('edit')
+  }
+
+  const handleDeleteCandidate = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this candidate?')) {
+      return
+    }
+
+    try {
+      const { candidateApi } = await import('@/lib/api')
+      
+      const result = await candidateApi.delete(id)
+      
+      if (result.success) {
+        toast.success('Candidate deleted successfully')
+        setRefreshTrigger(prev => prev + 1) // Trigger refresh
+      } else {
+        throw new Error(result.error || 'Failed to delete candidate')
+      }
+    } catch (error) {
+      console.error('Error deleting candidate:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to delete candidate')
+    }
+  }
+
+  const handleUpdateCandidate = async (formData: FormData) => {
+    if (!selectedCandidateId) return
+    
+    setLoading(true)
+    try {
+      const { candidateApi } = await import('@/lib/api')
+      
+      const result = await candidateApi.update(selectedCandidateId, formData)
+      
+      if (result.success) {
+        toast.success('Candidate updated successfully!')
+        setCurrentView('list')
+        setSelectedCandidateId(null)
+        setRefreshTrigger(prev => prev + 1) // Trigger refresh
+      } else {
+        throw new Error(result.error || 'Failed to update candidate')
+      }
+    } catch (error) {
+      console.error('Error updating candidate:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to update candidate')
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmitCandidate = async (formData: FormData) => {
+    setLoading(true)
+    try {
+      const { candidateApi } = await import('@/lib/api')
+      
+      const result = await candidateApi.create(formData)
+      
+      if (result.success) {
+        toast.success('Candidate added successfully! CV is being processed for automatic data extraction.')
+        setCurrentView('list')
+        setRefreshTrigger(prev => prev + 1) // Trigger refresh
+      } else {
+        throw new Error(result.error || 'Failed to create candidate')
+      }
+    } catch (error) {
+      console.error('Error submitting candidate:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to add candidate')
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBack = () => {
+    setCurrentView('list')
+    setSelectedCandidateId(null)
+  }
+
+  const handleAuthSuccess = () => {
+    setIsAuthenticated(true)
+  }
+
+  // Show loading while checking auth
+  if (!authChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show auth component if not authenticated
+  if (!isAuthenticated) {
+    return <AuthComponent onAuthSuccess={handleAuthSuccess} />
+  }
 
   return (
     <div className="flex-1 space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger />
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Candidates</h1>
-            <p className="text-slate-600">Manage and track all your candidates in one place</p>
+      <div className="flex items-center space-x-4 mb-6">
+        <SidebarTrigger />
+      </div>
+      
+      {currentView === 'list' && (
+        <CandidateList
+          onAddCandidate={handleAddCandidate}
+          onViewCandidate={handleViewCandidate}
+          onEditCandidate={handleEditCandidate}
+          onDeleteCandidate={handleDeleteCandidate}
+          refreshTrigger={refreshTrigger}
+        />
+      )}
+
+      {currentView === 'add' && (
+        <div>
+          <AddCandidateForm
+            onSubmit={handleSubmitCandidate}
+            loading={loading}
+          />
+          <div className="mt-6 text-center">
+            <button
+              onClick={handleBack}
+              className="text-gray-600 hover:text-gray-800 text-sm"
+            >
+              ← Back to candidates
+            </button>
           </div>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Candidate
-        </Button>
-      </div>
+      )}
 
-      {/* Filters */}
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search candidates by name, email, or position..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="interviewed">Interviewed</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="hired">Hired</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={positionFilter} onValueChange={setPositionFilter}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by position" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Positions</SelectItem>
-                <SelectItem value="Developer">Developer</SelectItem>
-                <SelectItem value="Manager">Manager</SelectItem>
-                <SelectItem value="Designer">Designer</SelectItem>
-                <SelectItem value="Engineer">Engineer</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline">
-              <Filter className="w-4 h-4 mr-2" />
-              More Filters
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {currentView === 'detail' && selectedCandidateId && (
+        <CandidateDetail
+          candidateId={selectedCandidateId}
+          onBack={handleBack}
+          onEdit={handleEditCandidate}
+        />
+      )}
 
-      {/* Candidates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredCandidates.map((candidate) => (
-          <Card key={candidate.id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="pb-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="w-12 h-12">
-                    <AvatarImage src={candidate.avatar || "/placeholder.svg"} alt={candidate.name} />
-                    <AvatarFallback>
-                      {candidate.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle className="text-lg">{candidate.name}</CardTitle>
-                    <CardDescription className="text-sm">{candidate.position}</CardDescription>
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Schedule Interview
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Badge className={getStatusColor(candidate.status)}>
-                  {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1)}
-                </Badge>
-                <div className="flex items-center space-x-1">
-                  <Star className={`w-4 h-4 ${getScoreColor(candidate.score)}`} />
-                  <span className={`font-bold ${getScoreColor(candidate.score)}`}>{candidate.score}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-sm text-slate-600">
-                <div className="flex items-center space-x-2">
-                  <Mail className="w-4 h-4" />
-                  <span className="truncate">{candidate.email}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Phone className="w-4 h-4" />
-                  <span>{candidate.phone}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>{candidate.location}</span>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-slate-700 mb-2">Skills</p>
-                <div className="flex flex-wrap gap-1">
-                  {candidate.skills.map((skill, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {skill}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-sm text-slate-500">
-                <span>{candidate.experience} experience</span>
-                <span>Last: {candidate.lastInterview}</span>
-              </div>
-
-              <div className="flex space-x-2">
-                <Button size="sm" className="flex-1">
-                  <Eye className="w-4 h-4 mr-2" />
-                  View
-                </Button>
-                <Button size="sm" variant="outline" className="flex-1 bg-transparent">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {filteredCandidates.length === 0 && (
-        <Card className="border-0 shadow-lg">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-              <Search className="w-8 h-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">No candidates found</h3>
-            <p className="text-slate-600 text-center mb-4">
-              Try adjusting your search criteria or add a new candidate to get started.
-            </p>
-            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add First Candidate
-            </Button>
-          </CardContent>
-        </Card>
+      {currentView === 'edit' && selectedCandidateId && (
+        <EditCandidateForm
+          candidateId={selectedCandidateId}
+          onSubmit={handleUpdateCandidate}
+          onCancel={handleBack}
+          loading={loading}
+        />
       )}
     </div>
   )

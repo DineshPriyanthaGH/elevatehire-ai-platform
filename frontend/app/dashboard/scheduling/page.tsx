@@ -1,122 +1,146 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Calendar } from "@/components/ui/calendar"
-import { CalendarIcon, Clock, Plus, Video, MapPin, Mail, Phone, Edit, Trash2, MoreHorizontal } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Calendar } from "@/components/ui/calendar"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { SidebarTrigger } from "@/components/ui/sidebar"
+import { toast } from "sonner"
+import {
+  CalendarIcon,
+  Plus,
+  Video,
+  MapPin,
+  Phone,
+  Clock,
+  Users,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Edit,
+  Trash2,
+  Eye
+} from "lucide-react"
 import { format } from "date-fns"
+import { interviewApi, candidateApi, type Candidate, type Interview, type InterviewType, type CreateInterviewData } from "@/lib/api"
 
-const upcomingInterviews = [
-  {
-    id: 1,
-    candidate: "Sarah Johnson",
-    position: "Senior Frontend Developer",
-    date: "2024-01-16",
-    time: "10:00 AM",
-    duration: "45 min",
-    type: "video",
-    interviewer: "John Smith",
-    status: "confirmed",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "sarah.johnson@email.com",
-    phone: "+1 (555) 123-4567",
-  },
-  {
-    id: 2,
-    candidate: "Michael Chen",
-    position: "Product Manager",
-    date: "2024-01-16",
-    time: "2:00 PM",
-    duration: "60 min",
-    type: "in-person",
-    interviewer: "Jane Doe",
-    status: "pending",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "michael.chen@email.com",
-    phone: "+1 (555) 234-5678",
-  },
-  {
-    id: 3,
-    candidate: "Emily Rodriguez",
-    position: "UX Designer",
-    date: "2024-01-17",
-    time: "11:30 AM",
-    duration: "45 min",
-    type: "video",
-    interviewer: "Bob Wilson",
-    status: "confirmed",
-    avatar: "/placeholder.svg?height=40&width=40",
-    email: "emily.rodriguez@email.com",
-    phone: "+1 (555) 345-6789",
-  },
-]
+interface Interviewer {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+}
+
+interface UpcomingInterview {
+  id: string
+  title: string
+  candidate: {
+    id: string
+    full_name: string
+    email: string
+    phone?: string
+    avatar?: string
+  }
+  interviewer: {
+    id: string
+    first_name: string
+    last_name: string
+  }
+  scheduled_date: string
+  duration_minutes: number
+  status: string
+  meeting_type: string
+  priority: string
+  interview_type: {
+    name: string
+    color: string
+  }
+}
+
+// Helper function to transform Interview API response to UpcomingInterview
+const transformInterviewToUpcoming = (interview: Interview): UpcomingInterview => {
+  return {
+    id: interview.id,
+    title: interview.title,
+    candidate: {
+      id: interview.candidate,
+      full_name: interview.candidate_name,
+      email: interview.candidate_email,
+      phone: interview.candidate_phone,
+      avatar: undefined
+    },
+    interviewer: {
+      id: interview.interviewer,
+      first_name: interview.interviewer_name.split(' ')[0] || '',
+      last_name: interview.interviewer_name.split(' ').slice(1).join(' ') || ''
+    },
+    scheduled_date: interview.scheduled_date,
+    duration_minutes: interview.duration_minutes,
+    status: interview.status,
+    meeting_type: interview.meeting_type,
+    priority: interview.priority,
+    interview_type: {
+      name: interview.interview_type_name,
+      color: interview.interview_type_color
+    }
+  }
+}
 
 const timeSlots = [
-  "9:00 AM",
-  "9:30 AM",
-  "10:00 AM",
-  "10:30 AM",
-  "11:00 AM",
-  "11:30 AM",
-  "12:00 PM",
-  "12:30 PM",
-  "1:00 PM",
-  "1:30 PM",
-  "2:00 PM",
-  "2:30 PM",
-  "3:00 PM",
-  "3:30 PM",
-  "4:00 PM",
-  "4:30 PM",
-  "5:00 PM",
-]
-
-const candidates = [
-  { id: 1, name: "Sarah Johnson", position: "Senior Frontend Developer" },
-  { id: 2, name: "Michael Chen", position: "Product Manager" },
-  { id: 3, name: "Emily Rodriguez", position: "UX Designer" },
-  { id: 4, name: "David Kim", position: "Data Scientist" },
-  { id: 5, name: "Lisa Wang", position: "Backend Developer" },
-]
-
-const interviewers = [
-  { id: 1, name: "John Smith", role: "Engineering Manager" },
-  { id: 2, name: "Jane Doe", role: "Product Director" },
-  { id: 3, name: "Bob Wilson", role: "Design Lead" },
-  { id: 4, name: "Alice Brown", role: "HR Manager" },
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+  "15:00", "15:30", "16:00", "16:30", "17:00"
 ]
 
 const getStatusColor = (status: string) => {
   switch (status) {
     case "confirmed":
       return "bg-green-100 text-green-700"
-    case "pending":
+    case "scheduled":
+      return "bg-blue-100 text-blue-700"
+    case "in_progress":
       return "bg-yellow-100 text-yellow-700"
+    case "completed":
+      return "bg-green-100 text-green-700"
     case "cancelled":
       return "bg-red-100 text-red-700"
+    case "rescheduled":
+      return "bg-purple-100 text-purple-700"
     default:
       return "bg-gray-100 text-gray-700"
   }
 }
 
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case "confirmed":
+    case "completed":
+      return <CheckCircle className="w-4 h-4" />
+    case "cancelled":
+      return <XCircle className="w-4 h-4" />
+    case "in_progress":
+      return <AlertCircle className="w-4 h-4" />
+    default:
+      return <Clock className="w-4 h-4" />
+  }
+}
+
 const getTypeIcon = (type: string) => {
   switch (type) {
-    case "video":
+    case "video_call":
       return <Video className="w-4 h-4" />
-    case "in-person":
+    case "in_person":
       return <MapPin className="w-4 h-4" />
-    case "phone":
+    case "phone_call":
       return <Phone className="w-4 h-4" />
     default:
       return <CalendarIcon className="w-4 h-4" />
@@ -124,32 +148,202 @@ const getTypeIcon = (type: string) => {
 }
 
 export default function SchedulingPage() {
+  // Helper function to ensure arrays
+  const ensureArray = (data: any): any[] => {
+    return Array.isArray(data) ? data : []
+  }
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [showScheduleForm, setShowScheduleForm] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [upcomingInterviews, setUpcomingInterviews] = useState<UpcomingInterview[]>([])
+  const [candidates, setCandidates] = useState<Candidate[]>([])
+  const [interviewers, setInterviewers] = useState<Interviewer[]>([])
+  const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([
+    { id: '1', name: 'Technical Interview', duration_minutes: 60, color: '#3b82f6', is_active: true, created_at: new Date().toISOString() },
+    { id: '2', name: 'HR Interview', duration_minutes: 45, color: '#10b981', is_active: true, created_at: new Date().toISOString() },
+    { id: '3', name: 'Behavioral Interview', duration_minutes: 45, color: '#f59e0b', is_active: true, created_at: new Date().toISOString() }
+  ])
+  
+
+  
   const [formData, setFormData] = useState({
+    title: "",
     candidate: "",
     interviewer: "",
+    interview_type: "",
     date: "",
     time: "",
-    duration: "45",
-    type: "video",
-    notes: "",
+    duration_minutes: "60",
+    meeting_type: "video_call",
+    priority: "normal",
+    description: "",
+    meeting_link: "",
+    meeting_location: ""
   })
 
-  const handleSchedule = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  useEffect(() => {
+    if (selectedDate) {
+      loadInterviewsForDate(selectedDate)
+    }
+  }, [selectedDate])
+
+  const loadData = async () => {
+    try {
+      const [candidatesRes, interviewersRes, interviewTypesRes] = await Promise.all([
+        candidateApi.getAll(),
+        interviewApi.getInterviewers(),
+        interviewApi.getInterviewTypes()
+      ])
+      
+      console.log('API Responses:', {
+        candidates: candidatesRes,
+        interviewers: interviewersRes,
+        interviewTypes: interviewTypesRes
+      })
+      
+      setCandidates(ensureArray(candidatesRes.data?.results))
+      setInterviewers(ensureArray(interviewersRes.data))
+      
+      // Ensure interviewTypes is always an array
+      const interviewTypesData = interviewTypesRes.data
+      if (Array.isArray(interviewTypesData) && interviewTypesData.length > 0) {
+        setInterviewTypes(interviewTypesData)
+      } else {
+        // Keep existing fallback data if API response is not valid
+        console.log('Using fallback interview types - API response invalid:', interviewTypesData)
+      }
+      
+      // Load upcoming interviews
+      loadUpcomingInterviews()
+    } catch (error) {
+      console.error('Error loading data:', error)
+      toast("Failed to load data")
+      
+      // Set fallback data if API fails
+      setCandidates([])
+      setInterviewers([])
+      // Keep existing fallback interview types - they're already initialized
+    }
+  }
+
+  const loadUpcomingInterviews = async () => {
+    try {
+      const response = await interviewApi.getAll({
+        upcoming: true,
+        page_size: 10
+      })
+      
+      if (response.data?.results && Array.isArray(response.data.results)) {
+        const transformedInterviews = response.data.results.map(transformInterviewToUpcoming)
+        setUpcomingInterviews(transformedInterviews)
+      } else {
+        setUpcomingInterviews([])
+      }
+    } catch (error) {
+      console.error('Error loading upcoming interviews:', error)
+      setUpcomingInterviews([])
+    }
+  }
+
+  const loadInterviewsForDate = async (date: Date) => {
+    try {
+      const startDate = format(date, 'yyyy-MM-dd')
+      const response = await interviewApi.getAll({
+        start_date: startDate,
+        end_date: startDate
+      })
+      
+      if (response.data?.results && Array.isArray(response.data.results)) {
+        const transformedInterviews = response.data.results.map(transformInterviewToUpcoming)
+        setUpcomingInterviews(transformedInterviews)
+      } else {
+        setUpcomingInterviews([])
+      }
+    } catch (error) {
+      console.error('Error loading interviews for date:', error)
+      setUpcomingInterviews([])
+    }
+  }
+
+  const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle scheduling logic here
-    console.log("Scheduling interview:", formData)
-    setShowScheduleForm(false)
+    setLoading(true)
+    
+    try {
+      const interviewData: CreateInterviewData = {
+        title: formData.title,
+        description: formData.description,
+        candidate: formData.candidate,
+        interview_type: formData.interview_type,
+        interviewer: formData.interviewer,
+        scheduled_date: `${formData.date}T${formData.time}:00`,
+        duration_minutes: parseInt(formData.duration_minutes),
+        meeting_type: formData.meeting_type,
+        priority: formData.priority,
+        meeting_link: formData.meeting_link,
+        meeting_location: formData.meeting_location
+      }
+      
+      const result = await interviewApi.create(interviewData)
+      
+      if (result.success) {
+        toast("Interview scheduled successfully!")
+        setShowScheduleForm(false)
+        resetForm()
+        loadUpcomingInterviews()
+        if (selectedDate) {
+          loadInterviewsForDate(selectedDate)
+        }
+      } else {
+        throw new Error(result.error || 'Failed to schedule interview')
+      }
+    } catch (error) {
+      console.error('Error scheduling interview:', error)
+      toast("Failed to schedule interview")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const resetForm = () => {
     setFormData({
+      title: "",
       candidate: "",
       interviewer: "",
+      interview_type: "",
       date: "",
       time: "",
-      duration: "45",
-      type: "video",
-      notes: "",
+      duration_minutes: "60",
+      meeting_type: "video_call",
+      priority: "normal",
+      description: "",
+      meeting_link: "",
+      meeting_location: ""
     })
+  }
+
+  const handleUpdateStatus = async (interviewId: string, action: string) => {
+    try {
+      if (action === 'cancel') {
+        await interviewApi.cancel(interviewId)
+      } else if (action === 'complete') {
+        await interviewApi.complete(interviewId)
+      }
+      
+      toast(`Interview ${action}d successfully`)
+      loadUpcomingInterviews()
+      if (selectedDate) {
+        loadInterviewsForDate(selectedDate)
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing interview:`, error)
+      toast(`Failed to ${action} interview`)
+    }
   }
 
   return (
@@ -163,13 +357,237 @@ export default function SchedulingPage() {
             <p className="text-slate-600">Schedule and manage interview appointments</p>
           </div>
         </div>
-        <Button
-          onClick={() => setShowScheduleForm(true)}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Schedule Interview
-        </Button>
+        <Dialog open={showScheduleForm} onOpenChange={setShowScheduleForm}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Schedule Interview
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Schedule New Interview</DialogTitle>
+              <DialogDescription>Fill in the details to schedule an interview</DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleSchedule} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Interview Title</Label>
+                  <Input
+                    id="title"
+                    placeholder="Enter interview title"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="interview_type">Interview Type</Label>
+                  <Select
+                    value={formData.interview_type}
+                    onValueChange={(value) => setFormData({ ...formData, interview_type: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select interview type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ensureArray(interviewTypes).map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name} ({type.duration_minutes} min)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="candidate">Candidate</Label>
+                  <Select
+                    value={formData.candidate}
+                    onValueChange={(value) => setFormData({ ...formData, candidate: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select candidate" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ensureArray(candidates).map((candidate) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.full_name} - {candidate.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="interviewer">Interviewer</Label>
+                  <Select
+                    value={formData.interviewer}
+                    onValueChange={(value) => setFormData({ ...formData, interviewer: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select interviewer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ensureArray(interviewers).map((interviewer) => (
+                        <SelectItem key={interviewer.id} value={interviewer.id}>
+                          {interviewer.first_name} {interviewer.last_name} - {interviewer.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time">Time</Label>
+                  <Select value={formData.time} onValueChange={(value) => setFormData({ ...formData, time: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeSlots.map((time) => (
+                        <SelectItem key={time} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="duration">Duration (minutes)</Label>
+                  <Select
+                    value={formData.duration_minutes}
+                    onValueChange={(value) => setFormData({ ...formData, duration_minutes: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Duration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="45">45 minutes</SelectItem>
+                      <SelectItem value="60">1 hour</SelectItem>
+                      <SelectItem value="90">1.5 hours</SelectItem>
+                      <SelectItem value="120">2 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="meeting_type">Meeting Type</Label>
+                  <Select
+                    value={formData.meeting_type}
+                    onValueChange={(value) => setFormData({ ...formData, meeting_type: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select meeting type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="video_call">
+                        <div className="flex items-center">
+                          <Video className="w-4 h-4 mr-2" />
+                          Video Call
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="in_person">
+                        <div className="flex items-center">
+                          <MapPin className="w-4 h-4 mr-2" />
+                          In Person
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="phone_call">
+                        <div className="flex items-center">
+                          <Phone className="w-4 h-4 mr-2" />
+                          Phone Call
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority</Label>
+                  <Select
+                    value={formData.priority}
+                    onValueChange={(value) => setFormData({ ...formData, priority: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {formData.meeting_type === 'video_call' && (
+                <div className="space-y-2">
+                  <Label htmlFor="meeting_link">Meeting Link</Label>
+                  <Input
+                    id="meeting_link"
+                    placeholder="https://zoom.us/j/123456789 or Teams link"
+                    value={formData.meeting_link}
+                    onChange={(e) => setFormData({ ...formData, meeting_link: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {formData.meeting_type === 'in_person' && (
+                <div className="space-y-2">
+                  <Label htmlFor="meeting_location">Location</Label>
+                  <Input
+                    id="meeting_location"
+                    placeholder="Conference Room A, Building 1"
+                    value={formData.meeting_location}
+                    onChange={(e) => setFormData({ ...formData, meeting_location: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Add any additional notes or instructions..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <Button type="button" variant="outline" onClick={() => setShowScheduleForm(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                >
+                  {loading ? "Scheduling..." : "Schedule Interview"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -183,7 +601,12 @@ export default function SchedulingPage() {
             <CardDescription>Select a date to view or schedule interviews</CardDescription>
           </CardHeader>
           <CardContent>
-            <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} className="rounded-md border" />
+            <Calendar 
+              mode="single" 
+              selected={selectedDate} 
+              onSelect={setSelectedDate} 
+              className="rounded-md border" 
+            />
           </CardContent>
         </Card>
 
@@ -197,226 +620,87 @@ export default function SchedulingPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {upcomingInterviews.map((interview) => (
-                <div key={interview.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={interview.avatar || "/placeholder.svg"} alt={interview.candidate} />
-                      <AvatarFallback>
-                        {interview.candidate
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h4 className="font-semibold text-slate-900">{interview.candidate}</h4>
-                      <p className="text-sm text-slate-600">{interview.position}</p>
-                      <div className="flex items-center space-x-4 mt-1 text-xs text-slate-500">
-                        <div className="flex items-center space-x-1">
-                          <CalendarIcon className="w-3 h-3" />
-                          <span>{interview.date}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{interview.time}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          {getTypeIcon(interview.type)}
-                          <span className="capitalize">{interview.type}</span>
+              {upcomingInterviews.length === 0 ? (
+                <div className="text-center py-8">
+                  <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No interviews scheduled</p>
+                  <p className="text-sm text-gray-400">Click "Schedule Interview" to add one</p>
+                </div>
+              ) : (
+                ensureArray(upcomingInterviews).map((interview) => (
+                  <div key={interview.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={interview.candidate.avatar} alt={interview.candidate.full_name} />
+                        <AvatarFallback>
+                          {interview.candidate.full_name.split(' ').map((n: string) => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h4 className="font-semibold text-slate-900">{interview.candidate.full_name}</h4>
+                        <p className="text-sm text-slate-600">{interview.title}</p>
+                        <div className="flex items-center space-x-4 mt-1">
+                          <div className="flex items-center text-xs text-slate-500">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {format(new Date(interview.scheduled_date), "MMM d, h:mm a")}
+                          </div>
+                          <div className="flex items-center text-xs text-slate-500">
+                            {getTypeIcon(interview.meeting_type)}
+                            <span className="ml-1">{interview.duration_minutes} min</span>
+                          </div>
+                          <div className="flex items-center text-xs text-slate-500">
+                            <Users className="w-3 h-3 mr-1" />
+                            {interview.interviewer.first_name} {interview.interviewer.last_name}
+                          </div>
                         </div>
                       </div>
                     </div>
+                    <div className="flex items-center space-x-3">
+                      <Badge className={getStatusColor(interview.status)}>
+                        {getStatusIcon(interview.status)}
+                        <span className="ml-1 capitalize">{interview.status}</span>
+                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          {interview.status === 'scheduled' && (
+                            <DropdownMenuItem onClick={() => handleUpdateStatus(interview.id, 'cancel')}>
+                              <XCircle className="w-4 h-4 mr-2" />
+                              Cancel
+                            </DropdownMenuItem>
+                          )}
+                          {interview.status === 'in_progress' && (
+                            <DropdownMenuItem onClick={() => handleUpdateStatus(interview.id, 'complete')}>
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Complete
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem className="text-red-600">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <Badge className={getStatusColor(interview.status)}>
-                      {interview.status.charAt(0).toUpperCase() + interview.status.slice(1)}
-                    </Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Mail className="w-4 h-4 mr-2" />
-                          Send Reminder
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600">
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Cancel
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Schedule Form Modal */}
-      {showScheduleForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl border-0 shadow-xl">
-            <CardHeader>
-              <CardTitle>Schedule New Interview</CardTitle>
-              <CardDescription>Fill in the details to schedule an interview</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSchedule} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="candidate">Candidate</Label>
-                    <Select
-                      value={formData.candidate}
-                      onValueChange={(value) => setFormData({ ...formData, candidate: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select candidate" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {candidates.map((candidate) => (
-                          <SelectItem key={candidate.id} value={candidate.name}>
-                            <div>
-                              <div className="font-medium">{candidate.name}</div>
-                              <div className="text-sm text-slate-500">{candidate.position}</div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="interviewer">Interviewer</Label>
-                    <Select
-                      value={formData.interviewer}
-                      onValueChange={(value) => setFormData({ ...formData, interviewer: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select interviewer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {interviewers.map((interviewer) => (
-                          <SelectItem key={interviewer.id} value={interviewer.name}>
-                            <div>
-                              <div className="font-medium">{interviewer.name}</div>
-                              <div className="text-sm text-slate-500">{interviewer.role}</div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Date</Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="time">Time</Label>
-                    <Select value={formData.time} onValueChange={(value) => setFormData({ ...formData, time: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {timeSlots.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duration</Label>
-                    <Select
-                      value={formData.duration}
-                      onValueChange={(value) => setFormData({ ...formData, duration: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select duration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                        <SelectItem value="45">45 minutes</SelectItem>
-                        <SelectItem value="60">60 minutes</SelectItem>
-                        <SelectItem value="90">90 minutes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="type">Interview Type</Label>
-                  <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select interview type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="video">
-                        <div className="flex items-center space-x-2">
-                          <Video className="w-4 h-4" />
-                          <span>Video Call</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="in-person">
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="w-4 h-4" />
-                          <span>In Person</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="phone">
-                        <div className="flex items-center space-x-2">
-                          <Phone className="w-4 h-4" />
-                          <span>Phone Call</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notes (Optional)</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Add any additional notes or instructions..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-3">
-                  <Button type="button" variant="outline" onClick={() => setShowScheduleForm(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                  >
-                    Schedule Interview
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

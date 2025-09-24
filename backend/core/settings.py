@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'corsheaders',
     # Custom apps
     'authentication',
+    'candidates',
     'interviews',
     'analytics',
     'ai_analysis',
@@ -85,40 +86,41 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Check if we're running in Docker or using DATABASE_URL
-DATABASE_URL = config('DATABASE_URL', default='')
-
-if DATABASE_URL:
-    # Use DATABASE_URL (for Docker/production)
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL)
+# Use SQLite for quick development setup
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-else:
-    # Use SQLite for development if PostgreSQL is not available
-    USE_SQLITE = config('USE_SQLITE', default=False, cast=bool)
+}
 
-    if USE_SQLITE:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': config('DB_NAME', default='elevatehire_db'),
-                'USER': config('DB_USER', default='postgres'),
-                'PASSWORD': config('DB_PASSWORD', default='priyantha2002'),
-                'HOST': config('DB_HOST', default='localhost'),
-                'PORT': config('DB_PORT', default='5432'),
-            }
-        }
+# Uncomment below for PostgreSQL production setup
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': config('DB_NAME', default='elevatehire_db'),
+#         'USER': config('DB_USER', default='postgres'),
+#         'PASSWORD': config('DB_PASSWORD', default='priyantha2002'),
+#         'HOST': config('DB_HOST', default='localhost'),
+#         'PORT': config('DB_PORT', default='5432'),
+#         'OPTIONS': {
+#             'connect_timeout': 60,
+#         },
+#     }
+# }
+
+# Database connection settings (removed for SQLite)
+# DATABASES['default']['ATOMIC_REQUESTS'] = True
+# DATABASES['default']['CONN_MAX_AGE'] = 600
 
 # Custom User Model
 AUTH_USER_MODEL = 'authentication.CustomUser'
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'authentication.backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -166,14 +168,20 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Production Mode Configuration
+PRODUCTION_MODE = config('PRODUCTION_MODE', default=False, cast=bool)
+
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.IsAuthenticated' if PRODUCTION_MODE else 'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 # JWT Configuration

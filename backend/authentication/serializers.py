@@ -33,7 +33,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class UserLoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
+    email_or_username = serializers.CharField(
+        help_text="Enter your email address or username"
+    )
     password = serializers.CharField()
 
 class UserSerializer(serializers.ModelSerializer):
