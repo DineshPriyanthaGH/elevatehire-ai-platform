@@ -183,20 +183,15 @@ export default function SchedulingPage() {
 
   const loadData = async () => {
     try {
-      const [candidatesRes, interviewersRes] = await Promise.all([
+      const [candidatesRes, interviewersRes, interviewTypesRes] = await Promise.all([
         candidateApi.getAll(),
-        interviewApi.getInterviewers()
+        interviewApi.getInterviewers(),
+        interviewApi.getInterviewTypes()
       ])
       
       setCandidates(candidatesRes.data?.results || [])
       setInterviewers(interviewersRes.data || [])
-      
-      // Mock interview types for now
-      setInterviewTypes([
-        { id: '1', name: 'Technical Interview', duration_minutes: 60, color: '#3b82f6', is_active: true, created_at: new Date().toISOString() },
-        { id: '2', name: 'HR Interview', duration_minutes: 45, color: '#10b981', is_active: true, created_at: new Date().toISOString() },
-        { id: '3', name: 'Behavioral Interview', duration_minutes: 45, color: '#f59e0b', is_active: true, created_at: new Date().toISOString() }
-      ])
+      setInterviewTypes(interviewTypesRes.data || [])
       
       // Load upcoming interviews
       loadUpcomingInterviews()

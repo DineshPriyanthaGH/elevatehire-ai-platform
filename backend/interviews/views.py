@@ -324,6 +324,47 @@ class InterviewViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(interview)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'])
+    def interviewers(self, request):
+        """Get list of available interviewers"""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        search = request.query_params.get('search', '')
+        
+        # Get active users who can be interviewers
+        users_queryset = User.objects.filter(is_active=True)
+        
+        if search:
+            users_queryset = users_queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(username__icontains=search)
+            )
+        
+        users_queryset = users_queryset.order_by('first_name', 'last_name')
+        
+        users_data = []
+        for user in users_queryset:
+            users_data.append({
+                'id': str(user.id),
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'full_name': user.get_full_name() or user.username,
+                'email': user.email
+            })
+        
+        return Response(users_data)
+
+    @action(detail=False, methods=['get'])
+    def interview_types(self, request):
+        """Get list of interview types for scheduling"""
+        interview_types = InterviewType.objects.filter(is_active=True).order_by('name')
+        serializer = InterviewTypeSerializer(interview_types, many=True)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['get', 'post'])
     def feedback(self, request, pk=None):
         """Get or create detailed feedback for interview"""

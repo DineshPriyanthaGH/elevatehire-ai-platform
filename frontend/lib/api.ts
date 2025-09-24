@@ -811,7 +811,7 @@ export const interviewApi = {
       const queryParams = new URLSearchParams()
       if (search) queryParams.append('search', search)
 
-      const response = await fetch(`${API_BASE_URL}/auth/users/?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/interviewers/?${queryParams}`, {
         headers: createHeaders(true)
       })
 
@@ -823,6 +823,28 @@ export const interviewApi = {
       return { success: true, data }
     } catch (error) {
       console.error('Error fetching interviewers:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get interview types for scheduling
+  async getInterviewTypes(): Promise<ApiResponse<InterviewType[]>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/api/interview-types/`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interview types')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching interview types:', error)
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
