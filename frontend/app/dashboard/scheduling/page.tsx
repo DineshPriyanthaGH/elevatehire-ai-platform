@@ -148,13 +148,24 @@ const getTypeIcon = (type: string) => {
 }
 
 export default function SchedulingPage() {
+  // Helper function to ensure arrays
+  const ensureArray = (data: any): any[] => {
+    return Array.isArray(data) ? data : []
+  }
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [showScheduleForm, setShowScheduleForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [upcomingInterviews, setUpcomingInterviews] = useState<UpcomingInterview[]>([])
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [interviewers, setInterviewers] = useState<Interviewer[]>([])
-  const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([])
+  const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([
+    { id: '1', name: 'Technical Interview', duration_minutes: 60, color: '#3b82f6', is_active: true, created_at: new Date().toISOString() },
+    { id: '2', name: 'HR Interview', duration_minutes: 45, color: '#10b981', is_active: true, created_at: new Date().toISOString() },
+    { id: '3', name: 'Behavioral Interview', duration_minutes: 45, color: '#f59e0b', is_active: true, created_at: new Date().toISOString() }
+  ])
+  
+
   
   const [formData, setFormData] = useState({
     title: "",
@@ -189,15 +200,34 @@ export default function SchedulingPage() {
         interviewApi.getInterviewTypes()
       ])
       
-      setCandidates(candidatesRes.data?.results || [])
-      setInterviewers(interviewersRes.data || [])
-      setInterviewTypes(interviewTypesRes.data || [])
+      console.log('API Responses:', {
+        candidates: candidatesRes,
+        interviewers: interviewersRes,
+        interviewTypes: interviewTypesRes
+      })
+      
+      setCandidates(ensureArray(candidatesRes.data?.results))
+      setInterviewers(ensureArray(interviewersRes.data))
+      
+      // Ensure interviewTypes is always an array
+      const interviewTypesData = interviewTypesRes.data
+      if (Array.isArray(interviewTypesData) && interviewTypesData.length > 0) {
+        setInterviewTypes(interviewTypesData)
+      } else {
+        // Keep existing fallback data if API response is not valid
+        console.log('Using fallback interview types - API response invalid:', interviewTypesData)
+      }
       
       // Load upcoming interviews
       loadUpcomingInterviews()
     } catch (error) {
       console.error('Error loading data:', error)
       toast("Failed to load data")
+      
+      // Set fallback data if API fails
+      setCandidates([])
+      setInterviewers([])
+      // Keep existing fallback interview types - they're already initialized
     }
   }
 
@@ -208,12 +238,15 @@ export default function SchedulingPage() {
         page_size: 10
       })
       
-      if (response.data?.results) {
+      if (response.data?.results && Array.isArray(response.data.results)) {
         const transformedInterviews = response.data.results.map(transformInterviewToUpcoming)
         setUpcomingInterviews(transformedInterviews)
+      } else {
+        setUpcomingInterviews([])
       }
     } catch (error) {
       console.error('Error loading upcoming interviews:', error)
+      setUpcomingInterviews([])
     }
   }
 
@@ -225,12 +258,15 @@ export default function SchedulingPage() {
         end_date: startDate
       })
       
-      if (response.data?.results) {
+      if (response.data?.results && Array.isArray(response.data.results)) {
         const transformedInterviews = response.data.results.map(transformInterviewToUpcoming)
         setUpcomingInterviews(transformedInterviews)
+      } else {
+        setUpcomingInterviews([])
       }
     } catch (error) {
       console.error('Error loading interviews for date:', error)
+      setUpcomingInterviews([])
     }
   }
 
@@ -356,7 +392,7 @@ export default function SchedulingPage() {
                       <SelectValue placeholder="Select interview type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {interviewTypes.map((type) => (
+                      {ensureArray(interviewTypes).map((type) => (
                         <SelectItem key={type.id} value={type.id}>
                           {type.name} ({type.duration_minutes} min)
                         </SelectItem>
@@ -377,7 +413,7 @@ export default function SchedulingPage() {
                       <SelectValue placeholder="Select candidate" />
                     </SelectTrigger>
                     <SelectContent>
-                      {candidates.map((candidate) => (
+                      {ensureArray(candidates).map((candidate) => (
                         <SelectItem key={candidate.id} value={candidate.id}>
                           {candidate.full_name} - {candidate.email}
                         </SelectItem>
@@ -395,7 +431,7 @@ export default function SchedulingPage() {
                       <SelectValue placeholder="Select interviewer" />
                     </SelectTrigger>
                     <SelectContent>
-                      {interviewers.map((interviewer) => (
+                      {ensureArray(interviewers).map((interviewer) => (
                         <SelectItem key={interviewer.id} value={interviewer.id}>
                           {interviewer.first_name} {interviewer.last_name} - {interviewer.email}
                         </SelectItem>
@@ -591,13 +627,13 @@ export default function SchedulingPage() {
                   <p className="text-sm text-gray-400">Click "Schedule Interview" to add one</p>
                 </div>
               ) : (
-                upcomingInterviews.map((interview) => (
+                ensureArray(upcomingInterviews).map((interview) => (
                   <div key={interview.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                     <div className="flex items-center space-x-4">
                       <Avatar className="w-12 h-12">
                         <AvatarImage src={interview.candidate.avatar} alt={interview.candidate.full_name} />
                         <AvatarFallback>
-                          {interview.candidate.full_name.split(' ').map(n => n[0]).join('')}
+                          {interview.candidate.full_name.split(' ').map((n: string) => n[0]).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <div>
