@@ -15,6 +15,26 @@ from candidates.models import Candidate
 
 User = get_user_model()
 
+class CandidateNestedSerializer(serializers.ModelSerializer):
+    """Nested serializer for candidate info in interviews"""
+    class Meta:
+        model = Candidate
+        fields = ['id', 'full_name', 'email', 'phone', 'display_name', 'current_position', 'current_company']
+
+class InterviewTypeNestedSerializer(serializers.ModelSerializer):
+    """Nested serializer for interview type info in interviews"""
+    class Meta:
+        model = InterviewType
+        fields = ['id', 'name', 'description', 'duration_minutes', 'color']
+
+class UserNestedSerializer(serializers.ModelSerializer):
+    """Nested serializer for user info"""
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'email']
+
 class InterviewTypeSerializer(serializers.ModelSerializer):
     """Serializer for InterviewType model"""
     interview_count = serializers.SerializerMethodField()
@@ -76,14 +96,19 @@ class InterviewFeedbackSerializer(serializers.ModelSerializer):
 
 class InterviewListSerializer(serializers.ModelSerializer):
     """Serializer for listing interviews"""
+    candidate = CandidateNestedSerializer(read_only=True)
+    interview_type = InterviewTypeNestedSerializer(read_only=True)
+    interviewer = UserNestedSerializer(read_only=True)
+    is_upcoming = serializers.BooleanField(read_only=True)
+    is_today = serializers.BooleanField(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
+    
+    # Keep legacy fields for backward compatibility
     candidate_name = serializers.CharField(source='candidate.full_name', read_only=True)
     candidate_email = serializers.CharField(source='candidate.email', read_only=True)
     interviewer_name = serializers.CharField(source='interviewer.get_full_name', read_only=True)
     interview_type_name = serializers.CharField(source='interview_type.name', read_only=True)
     interview_type_color = serializers.CharField(source='interview_type.color', read_only=True)
-    is_upcoming = serializers.BooleanField(read_only=True)
-    is_today = serializers.BooleanField(read_only=True)
-    is_overdue = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Interview
@@ -91,11 +116,27 @@ class InterviewListSerializer(serializers.ModelSerializer):
             'id', 'title', 'candidate', 'candidate_name', 'candidate_email',
             'interviewer', 'interviewer_name', 'interview_type', 'interview_type_name',
             'interview_type_color', 'scheduled_date', 'end_time', 'duration_minutes',
-            'status', 'priority', 'meeting_type', 'is_upcoming', 'is_today', 'is_overdue'
+            'status', 'priority', 'meeting_type', 'is_upcoming', 'is_today', 'is_overdue',
+            # AI Analysis fields
+            'video_file', 'ai_analysis_status', 'confidence_score', 'communication_score',
+            'technical_score', 'engagement_score', 'ai_sentiment', 'ai_keywords',
+            'ai_recommendations', 'ai_summary', 'transcript', 'ai_processed_at'
         ]
 
 class InterviewDetailSerializer(serializers.ModelSerializer):
     """Serializer for detailed interview view"""
+    candidate = CandidateNestedSerializer(read_only=True)
+    interview_type = InterviewTypeNestedSerializer(read_only=True)
+    interviewer = UserNestedSerializer(read_only=True)
+    created_by = UserNestedSerializer(read_only=True)
+    additional_interviewers = UserNestedSerializer(many=True, read_only=True)
+    detailed_feedback = InterviewFeedbackSerializer(read_only=True)
+    is_upcoming = serializers.BooleanField(read_only=True)
+    is_today = serializers.BooleanField(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
+    time_until_interview = serializers.SerializerMethodField()
+    
+    # Keep legacy fields for backward compatibility
     candidate_name = serializers.CharField(source='candidate.full_name', read_only=True)
     candidate_email = serializers.CharField(source='candidate.email', read_only=True)
     candidate_phone = serializers.CharField(source='candidate.phone', read_only=True)
@@ -105,11 +146,6 @@ class InterviewDetailSerializer(serializers.ModelSerializer):
     interview_type_color = serializers.CharField(source='interview_type.color', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
     additional_interviewer_names = serializers.SerializerMethodField()
-    detailed_feedback = InterviewFeedbackSerializer(read_only=True)
-    is_upcoming = serializers.BooleanField(read_only=True)
-    is_today = serializers.BooleanField(read_only=True)
-    is_overdue = serializers.BooleanField(read_only=True)
-    time_until_interview = serializers.SerializerMethodField()
     
     class Meta:
         model = Interview
@@ -123,7 +159,11 @@ class InterviewDetailSerializer(serializers.ModelSerializer):
             'follow_up_notes', 'preparation_materials', 'interview_questions',
             'created_by', 'created_by_name', 'created_at', 'updated_at',
             'reminder_sent_candidate', 'reminder_sent_interviewer', 'detailed_feedback',
-            'is_upcoming', 'is_today', 'is_overdue', 'time_until_interview'
+            'is_upcoming', 'is_today', 'is_overdue', 'time_until_interview',
+            # AI Analysis fields
+            'video_file', 'ai_analysis_status', 'confidence_score', 'communication_score',
+            'technical_score', 'engagement_score', 'ai_sentiment', 'ai_keywords',
+            'ai_recommendations', 'ai_summary', 'transcript', 'ai_processed_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'end_time']
     

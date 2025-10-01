@@ -72,10 +72,10 @@ const transformInterviewToUpcoming = (interview: Interview): UpcomingInterview =
     id: interview.id,
     title: interview.title,
     candidate: {
-      id: interview.candidate,
-      full_name: interview.candidate_name,
-      email: interview.candidate_email,
-      phone: interview.candidate_phone,
+      id: interview.candidate.id,
+      full_name: interview.candidate.full_name,
+      email: interview.candidate.email,
+      phone: undefined, // Phone not available in current interview structure
       avatar: undefined
     },
     interviewer: {
@@ -89,8 +89,8 @@ const transformInterviewToUpcoming = (interview: Interview): UpcomingInterview =
     meeting_type: interview.meeting_type,
     priority: interview.priority,
     interview_type: {
-      name: interview.interview_type_name,
-      color: interview.interview_type_color
+      name: interview.interview_type.name,
+      color: interview.interview_type.color
     }
   }
 }

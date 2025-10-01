@@ -534,3 +534,282 @@ class InterviewTemplateViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set created_by when creating template"""
         serializer.save(created_by=self.request.user)
+
+class InterviewAIAnalysisViewSet(viewsets.ViewSet):
+    """ViewSet for AI analysis of interviews"""
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=True, methods=['post'])
+    def upload_video(self, request, pk=None):
+        """Upload video for AI analysis"""
+        try:
+            interview = Interview.objects.get(pk=pk)
+        except Interview.DoesNotExist:
+            return Response(
+                {'error': 'Interview not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if not (interview.interviewer == request.user or 
+                request.user in interview.additional_interviewers.all() or 
+                request.user.is_staff):
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        video_file = request.FILES.get('video_file')
+        if not video_file:
+            return Response(
+                {'error': 'Video file is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate file type and size
+        allowed_types = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv']
+        if video_file.content_type not in allowed_types:
+            return Response(
+                {'error': 'Invalid file type. Supported formats: MP4, AVI, MOV, WMV'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate file size (max 500MB)
+        max_size = 500 * 1024 * 1024  # 500MB in bytes
+        if video_file.size > max_size:
+            return Response(
+                {'error': 'File too large. Maximum size is 500MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Save video file
+        interview.video_file = video_file
+        interview.ai_analysis_status = 'processing'
+        interview.save()
+        
+        # Start AI analysis (async)
+        from .services import InterviewAnalysisService
+        try:
+            InterviewAnalysisService.analyze_interview_async(interview)
+        except Exception as e:
+            logger.error(f"Failed to start AI analysis for interview {interview.id}: {str(e)}")
+            interview.ai_analysis_status = 'failed'
+            interview.save()
+            return Response(
+                {'error': 'Failed to start AI analysis'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        return Response({
+            'message': 'Video uploaded successfully. AI analysis started.',
+            'interview_id': str(interview.id),
+            'status': 'processing'
+        })
+    
+    @action(detail=True, methods=['get'])
+    def analysis_status(self, request, pk=None):
+        """Get AI analysis status"""
+        try:
+            interview = Interview.objects.get(pk=pk)
+        except Interview.DoesNotExist:
+            return Response(
+                {'error': 'Interview not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if not (interview.interviewer == request.user or 
+                request.user in interview.additional_interviewers.all() or 
+                request.user.is_staff):
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        analysis_data = {
+            'interview_id': str(interview.id),
+            'status': interview.ai_analysis_status,
+            'has_video': bool(interview.video_file),
+            'processed_at': interview.ai_processed_at,
+            'analysis_results': None
+        }
+        
+        # Include analysis results if completed
+        if interview.ai_analysis_status == 'completed':
+            analysis_data['analysis_results'] = {
+                'confidence_score': interview.confidence_score,
+                'communication_score': interview.communication_score,
+                'technical_score': interview.technical_score,
+                'engagement_score': interview.engagement_score,
+                'sentiment': interview.ai_sentiment,
+                'keywords': interview.ai_keywords,
+                'recommendations': interview.ai_recommendations,
+                'summary': interview.ai_summary,
+                'transcript': interview.transcript
+            }
+        
+        return Response(analysis_data)
+    
+    @action(detail=True, methods=['post'])
+    def reanalyze(self, request, pk=None):
+        """Restart AI analysis for interview"""
+        try:
+            interview = Interview.objects.get(pk=pk)
+        except Interview.DoesNotExist:
+            return Response(
+                {'error': 'Interview not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if not (interview.interviewer == request.user or 
+                request.user in interview.additional_interviewers.all() or 
+                request.user.is_staff):
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if not interview.video_file:
+            return Response(
+                {'error': 'No video file available for analysis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Reset analysis data
+        interview.ai_analysis_status = 'processing'
+        interview.confidence_score = None
+        interview.communication_score = None
+        interview.technical_score = None
+        interview.engagement_score = None
+        interview.ai_sentiment = ''
+        interview.ai_keywords = []
+        interview.ai_recommendations = []
+        interview.ai_summary = ''
+        interview.transcript = ''
+        interview.ai_processed_at = None
+        interview.save()
+        
+        # Start AI analysis
+        from .services import InterviewAnalysisService
+        try:
+            InterviewAnalysisService.analyze_interview_async(interview)
+        except Exception as e:
+            logger.error(f"Failed to restart AI analysis for interview {interview.id}: {str(e)}")
+            interview.ai_analysis_status = 'failed'
+            interview.save()
+            return Response(
+                {'error': 'Failed to restart AI analysis'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        return Response({
+            'message': 'AI analysis restarted',
+            'interview_id': str(interview.id),
+            'status': 'processing'
+        })
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Get AI analysis statistics"""
+        user = request.user
+        
+        # Filter interviews based on user permissions
+        if user.is_staff:
+            queryset = Interview.objects.all()
+        else:
+            queryset = Interview.objects.filter(
+                Q(interviewer=user) | 
+                Q(additional_interviewers=user) | 
+                Q(created_by=user)
+            )
+        
+        # Calculate statistics
+        total_interviews = queryset.count()
+        analyzed_interviews = queryset.filter(ai_analysis_status='completed').count()
+        processing_interviews = queryset.filter(ai_analysis_status='processing').count()
+        failed_analyses = queryset.filter(ai_analysis_status='failed').count()
+        
+        # Average scores for completed analyses
+        completed_analyses = queryset.filter(ai_analysis_status='completed')
+        avg_confidence = completed_analyses.aggregate(Avg('confidence_score'))['confidence_score__avg'] or 0
+        avg_communication = completed_analyses.aggregate(Avg('communication_score'))['communication_score__avg'] or 0
+        avg_technical = completed_analyses.aggregate(Avg('technical_score'))['technical_score__avg'] or 0
+        avg_engagement = completed_analyses.aggregate(Avg('engagement_score'))['engagement_score__avg'] or 0
+        
+        # Sentiment distribution
+        sentiment_stats = completed_analyses.values('ai_sentiment').annotate(count=Count('id'))
+        sentiment_distribution = {item['ai_sentiment'] or 'neutral': item['count'] for item in sentiment_stats}
+        
+        return Response({
+            'total_interviews': total_interviews,
+            'analyzed_interviews': analyzed_interviews,
+            'processing_interviews': processing_interviews,
+            'failed_analyses': failed_analyses,
+            'analysis_completion_rate': round((analyzed_interviews / total_interviews * 100) if total_interviews > 0 else 0, 2),
+            'average_scores': {
+                'confidence': round(avg_confidence, 2) if avg_confidence else 0,
+                'communication': round(avg_communication, 2) if avg_communication else 0,
+                'technical': round(avg_technical, 2) if avg_technical else 0,
+                'engagement': round(avg_engagement, 2) if avg_engagement else 0
+            },
+            'sentiment_distribution': sentiment_distribution
+        })
+    
+    @action(detail=True, methods=['get'])
+    def download_transcript(self, request, pk=None):
+        """Download interview transcript"""
+        try:
+            interview = Interview.objects.get(pk=pk)
+        except Interview.DoesNotExist:
+            return Response(
+                {'error': 'Interview not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if not (interview.interviewer == request.user or 
+                request.user in interview.additional_interviewers.all() or 
+                request.user.is_staff):
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if not interview.transcript:
+            return Response(
+                {'error': 'No transcript available'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        from django.http import HttpResponse
+        
+        # Create transcript content
+        transcript_content = f"""
+Interview Transcript
+==================
+
+Interview: {interview.title}
+Candidate: {interview.candidate.full_name}
+Interviewer: {interview.interviewer.get_full_name()}
+Date: {interview.scheduled_date.strftime('%Y-%m-%d %H:%M')}
+Duration: {interview.duration_minutes} minutes
+
+Transcript:
+-----------
+
+{interview.transcript}
+
+AI Analysis Summary:
+-------------------
+
+{interview.ai_summary or 'No summary available'}
+
+Generated on: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
+        """.strip()
+        
+        response = HttpResponse(transcript_content, content_type='text/plain')
+        filename = f"interview_transcript_{interview.candidate.full_name.replace(' ', '_')}_{interview.scheduled_date.strftime('%Y%m%d')}.txt"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response

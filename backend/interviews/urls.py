@@ -10,9 +10,10 @@ router.register(r'interviews', views.InterviewViewSet)
 router.register(r'interview-types', views.InterviewTypeViewSet)
 router.register(r'availability', views.InterviewAvailabilityViewSet)
 router.register(r'templates', views.InterviewTemplateViewSet)
+router.register(r'ai-analysis', views.InterviewAIAnalysisViewSet, basename='ai-analysis')
 
 app_name = 'interviews'
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
 ]

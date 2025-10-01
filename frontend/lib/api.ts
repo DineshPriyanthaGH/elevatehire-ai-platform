@@ -444,13 +444,16 @@ export interface Interview {
   id: string
   title: string
   description?: string
-  candidate: string
-  candidate_name: string
-  candidate_email: string
-  candidate_phone?: string
-  interview_type: string
-  interview_type_name: string
-  interview_type_color: string
+  candidate: {
+    id: string
+    full_name: string
+    email: string
+  }
+  interview_type: {
+    id: string
+    name: string
+    color: string
+  }
   interviewer: string
   interviewer_name: string
   interviewer_email: string
@@ -481,6 +484,20 @@ export interface Interview {
   is_today: boolean
   is_overdue: boolean
   time_until_interview?: string
+  
+  // AI Analysis fields
+  ai_analysis_status: string
+  confidence_score?: number
+  communication_score?: number
+  technical_score?: number
+  engagement_score?: number
+  ai_summary?: string
+  ai_sentiment?: string
+  ai_keywords?: string[]
+  ai_recommendations?: string[]
+  video_file?: string
+  transcript?: string
+  ai_processed_at?: string
 }
 
 export interface InterviewType {
@@ -564,7 +581,7 @@ export const interviewApi = {
       if (params?.page) queryParams.append('page', params.page.toString())
       if (params?.page_size) queryParams.append('page_size', params.page_size.toString())
 
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/?${queryParams}`, {
         headers: createHeaders(true)
       })
 
@@ -590,7 +607,7 @@ export const interviewApi = {
       if (start) queryParams.append('start', start)
       if (end) queryParams.append('end', end)
 
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/calendar_events/?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/calendar_events/?${queryParams}`, {
         headers: createHeaders(true)
       })
 
@@ -612,7 +629,7 @@ export const interviewApi = {
   // Create a new interview
   async create(interviewData: CreateInterviewData): Promise<ApiResponse<Interview>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/`, {
         method: 'POST',
         headers: {
           ...createHeaders(true),
@@ -640,7 +657,7 @@ export const interviewApi = {
   // Get interview by ID
   async getById(id: string): Promise<ApiResponse<Interview>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/${id}/`, {
         headers: createHeaders(true)
       })
 
@@ -662,7 +679,7 @@ export const interviewApi = {
   // Update interview
   async update(id: string, updateData: Partial<CreateInterviewData>): Promise<ApiResponse<Interview>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/${id}/`, {
         method: 'PATCH',
         headers: {
           ...createHeaders(true),
@@ -690,7 +707,7 @@ export const interviewApi = {
   // Cancel interview
   async cancel(id: string, reason?: string): Promise<ApiResponse<Interview>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/cancel/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/${id}/cancel/`, {
         method: 'POST',
         headers: {
           ...createHeaders(true),
@@ -718,7 +735,7 @@ export const interviewApi = {
   // Complete interview
   async complete(id: string, notes?: string): Promise<ApiResponse<Interview>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/${id}/complete/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/${id}/complete/`, {
         method: 'POST',
         headers: {
           ...createHeaders(true),
@@ -746,7 +763,7 @@ export const interviewApi = {
   // Get interview types
   async getTypes(): Promise<ApiResponse<InterviewType[]>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interview-types/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interview-types/`, {
         headers: createHeaders(true)
       })
 
@@ -779,7 +796,7 @@ export const interviewApi = {
       queryParams.append('end_date', params.end_date)
       if (params.duration) queryParams.append('duration', params.duration.toString())
 
-      const response = await fetch(`${API_BASE_URL}/interviews/api/availability/available_slots/?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/availability/available_slots/?${queryParams}`, {
         headers: createHeaders(true)
       })
 
@@ -811,7 +828,7 @@ export const interviewApi = {
       const queryParams = new URLSearchParams()
       if (search) queryParams.append('search', search)
 
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interviews/interviewers/?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interviews/interviewers/?${queryParams}`, {
         headers: createHeaders(true)
       })
 
@@ -833,7 +850,7 @@ export const interviewApi = {
   // Get interview types for scheduling
   async getInterviewTypes(): Promise<ApiResponse<InterviewType[]>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/interviews/api/interview-types/`, {
+      const response = await fetch(`${API_BASE_URL}/interviews/interview-types/`, {
         headers: createHeaders(true)
       })
 
@@ -896,5 +913,231 @@ export const api = {
     })
     if (!response.ok) throw new Error('API request failed')
     return response.json()
+  }
+}
+
+// Video Interview interfaces
+export interface VideoInterview {
+  id: string
+  interview: string
+  title: string
+  description: string
+  video_file: string
+  file_size: number
+  file_size_mb: number
+  duration: string
+  duration_formatted: string
+  video_format: string
+  status: 'uploaded' | 'processing' | 'analyzed' | 'failed'
+  processing_started_at?: string
+  processing_completed_at?: string
+  error_message?: string
+  uploaded_by: string
+  uploaded_by_name: string
+  created_at: string
+  updated_at: string
+  transcript?: VideoTranscript
+  ai_analyses?: AIAnalysis[]
+  analytics_summary?: VideoAnalyticsSummary
+}
+
+export interface VideoTranscript {
+  transcript_text: string
+  confidence_score: number
+  segments: Array<{
+    start: number
+    end: number
+    text: string
+  }>
+}
+
+export interface AIAnalysis {
+  id: string
+  analysis_type: string
+  analysis_type_display: string
+  results: Record<string, any>
+  score: number
+  summary: string
+  recommendations: string
+  ai_model_used: string
+  confidence_level: number
+  processing_time_formatted: string
+}
+
+export interface VideoAnalyticsSummary {
+  overall_score: number
+  overall_grade: string
+  communication_score: number
+  technical_score: number
+  behavioral_score: number
+  strengths: string[]
+  weaknesses: string[]
+  key_topics: string[]
+  sentiment_distribution: Record<string, number>
+  speaking_pace: number
+  filler_words_count: number
+  recommendation: string
+  next_steps: string
+}
+
+// Interview AI Analysis API
+export const interviewAIAnalysisApi = {
+  // Upload video for AI analysis
+  uploadVideo: async (interviewId: string, videoFile: File): Promise<ApiResponse<{ message: string; interview_id: string; status: string }>> => {
+    try {
+      const formData = new FormData()
+      formData.append('video_file', videoFile)
+      
+      const response = await fetch(`${API_BASE_URL}/interviews/ai-analysis/${interviewId}/upload_video/`, {
+        method: 'POST',
+        headers: createHeaders(true), // Don't set Content-Type for FormData
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      return {
+        success: true,
+        data: data
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Upload failed' 
+      }
+    }
+  },
+
+  // Get AI analysis status and results
+  getAnalysisStatus: async (interviewId: string): Promise<ApiResponse<{
+    interview_id: string
+    status: 'pending' | 'processing' | 'completed' | 'failed'
+    has_video: boolean
+    processed_at?: string
+    analysis_results?: {
+      confidence_score: number
+      communication_score: number
+      technical_score: number
+      engagement_score: number
+      sentiment: string
+      keywords: string[]
+      recommendations: string[]
+      summary: string
+      transcript: string
+    }
+  }>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/ai-analysis/${interviewId}/analysis_status/`, {
+        headers: createHeaders(true)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      return {
+        success: true,
+        data: data
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to get analysis status' 
+      }
+    }
+  },
+
+  // Restart AI analysis
+  reanalyze: async (interviewId: string): Promise<ApiResponse<{ message: string; interview_id: string; status: string }>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/ai-analysis/${interviewId}/reanalyze/`, {
+        method: 'POST',
+        headers: createHeaders(true)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      return {
+        success: true,
+        data: data
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Reanalysis failed' 
+      }
+    }
+  },
+
+  // Get analysis statistics
+  getStatistics: async (): Promise<ApiResponse<{
+    total_interviews: number
+    analyzed_interviews: number
+    processing_interviews: number
+    failed_analyses: number
+    analysis_completion_rate: number
+    average_scores: {
+      confidence: number
+      communication: number
+      technical: number
+      engagement: number
+    }
+    sentiment_distribution: Record<string, number>
+  }>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/ai-analysis/statistics/`, {
+        headers: createHeaders(true)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      return {
+        success: true,
+        data: data
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch statistics' 
+      }
+    }
+  },
+
+  // Download transcript
+  downloadTranscript: async (interviewId: string): Promise<ApiResponse<Blob>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/ai-analysis/${interviewId}/download_transcript/`, {
+        headers: createHeaders(true)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+      
+      const blob = await response.blob()
+      return {
+        success: true,
+        data: blob
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Download failed' 
+      }
+    }
   }
 }

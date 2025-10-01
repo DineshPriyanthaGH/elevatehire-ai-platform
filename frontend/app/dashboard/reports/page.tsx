@@ -209,7 +209,7 @@ export default function ReportsPage() {
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
-                  label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name} ${(Number(percent || 0) * 100).toFixed(0)}%`}
                 >
                   {performanceMetrics.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />

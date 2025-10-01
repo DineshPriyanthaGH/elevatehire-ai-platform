@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     'candidates',
     'interviews',
     'analytics',
-    'ai_analysis',
     'scoring',
     'reports',
 ]
@@ -205,3 +204,25 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Static files (production)
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
+# File Upload Settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
+FILE_UPLOAD_PERMISSIONS = 0o644
+
+# Video Upload Settings
+MAX_VIDEO_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+ALLOWED_VIDEO_FORMATS = [
+    'video/mp4', 'video/avi', 'video/mov', 'video/webm', 'video/mkv',
+    'video/quicktime', 'video/x-msvideo'
+]
+
+# AI Analysis Settings
+AI_ANALYSIS_ENABLED = config('AI_ANALYSIS_ENABLED', default=True, cast=bool)
+AI_ANALYSIS_TIMEOUT = config('AI_ANALYSIS_TIMEOUT', default=300, cast=int)  # 5 minutes
+
+# Gemini AI Configuration
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-pro')
+GEMINI_MAX_TOKENS = config('GEMINI_MAX_TOKENS', default=2048, cast=int)
+GEMINI_TEMPERATURE = config('GEMINI_TEMPERATURE', default=0.7, cast=float)
