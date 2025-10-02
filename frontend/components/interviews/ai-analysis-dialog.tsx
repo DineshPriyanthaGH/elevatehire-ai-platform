@@ -25,6 +25,7 @@ import {
   Target,
   Lightbulb,
   FileText,
+  FileVideo,
 } from "lucide-react"
 
 interface AIAnalysisDialogProps {
@@ -55,6 +56,7 @@ interface AIAnalysisDialogProps {
     ai_keywords?: string[]
     ai_recommendations?: string[]
     transcript?: string
+    video_file?: string
   }
 }
 
@@ -204,6 +206,36 @@ export function AIAnalysisDialog({ isOpen, onClose, interview }: AIAnalysisDialo
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
+            {/* Video Player */}
+            {interview.video_file && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <FileVideo className="w-5 h-5 text-blue-600" />
+                    <span>Interview Video</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                    <video 
+                      controls 
+                      className="w-full h-full object-contain"
+                      preload="metadata"
+                    >
+                      <source src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${interview.video_file}`} type="video/mp4" />
+                      <source src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${interview.video_file}`} type="video/webm" />
+                      <source src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${interview.video_file}`} type="video/avi" />
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-sm text-gray-500">
+                    <span>Video file: {interview.video_file.split('/').pop()}</span>
+                    <span>Status: {interview.ai_analysis_status}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Overall Score */}
             <Card>
               <CardHeader>

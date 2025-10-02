@@ -1,55 +1,49 @@
 """
-AI Analysis Services for Interviews using Gemini API
+AI Analysis Services for Interviews using Celery Tasks
 """
 import os
 import logging
 import json
-import asyncio
-from typing import Dict, List, Optional
-from django.conf import settings
-from django.utils import timezone
-import google.generativeai as genai
-from concurrent.futures import ThreadPoolExecutor
 import time
 import random
 import re
+from typing import Dict, List, Optional
+from django.conf import settings
+from django.utils import timezone
+
+# Import genai only if available
+try:
+    import google.generativeai as genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
 class InterviewAnalysisService:
-    """Service for AI-powered interview analysis using Gemini API"""
-    
-    def __init__(self):
-        # Configure Gemini API
-        self.api_key = getattr(settings, 'GEMINI_API_KEY', None)
-        self.use_mock = not bool(self.api_key)
-        
-        if not self.use_mock:
-            try:
-                genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel(
-                    model_name=getattr(settings, 'GEMINI_MODEL', 'gemini-pro')
-                )
-                logger.info("Gemini API configured successfully")
-            except Exception as e:
-                logger.error(f"Failed to configure Gemini API: {str(e)}")
-                self.use_mock = True
-        
-        if self.use_mock:
-            logger.warning("Using mock analysis. Configure GEMINI_API_KEY for real AI analysis.")
+    """Service for AI-powered interview analysis using Celery tasks"""
     
     @classmethod
     def analyze_interview_async(cls, interview):
-        """Start asynchronous interview analysis"""
-        service = cls()
+        """Start asynchronous interview analysis using Celery task"""
+        from .tasks import process_interview_analysis
         
-        # Run analysis in thread pool to avoid blocking
-        executor = ThreadPoolExecutor(max_workers=1)
-        executor.submit(service._analyze_interview, interview)
+        # Get video file path if available
+        video_path = None
+        if hasattr(interview, 'video_file') and interview.video_file:
+            video_path = interview.video_file.path if hasattr(interview.video_file, 'path') else str(interview.video_file)
         
-        logger.info(f"Started AI analysis for interview {interview.id}")
+        # Update AI analysis status to processing  
+        interview.ai_analysis_status = 'processing'
+        interview.save()
+        
+        # Queue the analysis task
+        task = process_interview_analysis.delay(interview.id, video_path)
+        
+        logger.info(f"Queued AI analysis for interview {interview.id} with task ID: {task.id}")
+        return task.id
     
-    def _analyze_interview(self, interview):
+    def _analyze_interview_legacy(self, interview):
         """Perform the actual interview analysis"""
         try:
             logger.info(f"Starting AI analysis for interview {interview.id}")

@@ -101,45 +101,103 @@ export function UploadVideoDialog({ isOpen, onClose, onUploadComplete }: UploadV
     setUploadProgress(0)
 
     try {
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return prev
+      // Import API functions
+      const { interviewApi, interviewAIAnalysisApi, candidateApi } = await import('@/lib/api')
+
+      // Step 1: Create or get candidate
+      setUploadProgress(10)
+      let candidateId: string
+
+      // Try to find existing candidate by name (simple search)
+      const candidatesResult = await candidateApi.getAll()
+      if (candidatesResult.success && candidatesResult.data) {
+        const existingCandidate = candidatesResult.data.results.find(
+          (c: any) => c.full_name.toLowerCase() === candidateName.toLowerCase()
+        )
+        
+        if (existingCandidate) {
+          candidateId = existingCandidate.id
+        } else {
+          // Create new candidate using FormData
+          const candidateFormData = new FormData()
+          candidateFormData.append('first_name', candidateName.split(' ')[0] || candidateName)
+          candidateFormData.append('last_name', candidateName.split(' ').slice(1).join(' ') || '')
+          candidateFormData.append('email', `${candidateName.toLowerCase().replace(/\s+/g, '.')}@example.com`)
+          candidateFormData.append('phone', '000-000-0000')
+          candidateFormData.append('current_position', position)
+          candidateFormData.append('skills', JSON.stringify([]))
+          
+          const newCandidateResult = await candidateApi.create(candidateFormData)
+          
+          if (!newCandidateResult.success || !newCandidateResult.data) {
+            throw new Error('Failed to create candidate: ' + newCandidateResult.error)
           }
-          return prev + Math.random() * 15
-        })
-      }, 200)
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      
-      clearInterval(progressInterval)
-      setUploadProgress(100)
-
-      // Simulate successful upload
-      const interviewData = {
-        id: Date.now(),
-        candidate: candidateName,
-        position,
-        interviewType,
-        notes,
-        date: new Date().toISOString().split('T')[0],
-        status: 'processing',
-        videoFile: uploadedFile.file.name
+          candidateId = newCandidateResult.data.id
+        }
+      } else {
+        throw new Error('Failed to fetch candidates')
       }
 
+      // Step 2: Get available interview types and interviewers
+      setUploadProgress(30)
+      const [interviewTypesResult, interviewersResult] = await Promise.all([
+        interviewApi.getInterviewTypes(),
+        interviewApi.getInterviewers()
+      ])
+
+      if (!interviewTypesResult.success || !interviewersResult.success || !interviewTypesResult.data || !interviewersResult.data) {
+        throw new Error('Failed to fetch interview configuration')
+      }
+
+      // Get default interview type and interviewer
+      const defaultInterviewType = interviewTypesResult.data.find(
+        (type: any) => type.name.toLowerCase().includes(interviewType.toLowerCase() || 'technical')
+      ) || interviewTypesResult.data[0]
+
+      const defaultInterviewer = interviewersResult.data[0] // Use first available interviewer
+
+      // Step 3: Create interview
+      setUploadProgress(50)
+      const interviewData = {
+        title: `${defaultInterviewType.name} - ${candidateName}`,
+        description: notes || `Video interview for ${position} position`,
+        candidate: candidateId,
+        interview_type: defaultInterviewType.id,
+        interviewer: defaultInterviewer.id,
+        scheduled_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+        duration_minutes: defaultInterviewType.duration_minutes || 60,
+        meeting_type: 'video_call',
+        status: 'completed', // Set as completed since we're uploading a recording
+        priority: 'normal'
+      }
+
+      const createInterviewResult = await interviewApi.create(interviewData)
+      if (!createInterviewResult.success || !createInterviewResult.data) {
+        throw new Error('Failed to create interview: ' + createInterviewResult.error)
+      }
+
+      const createdInterview = createInterviewResult.data
+
+      // Step 4: Upload video to the created interview
+      setUploadProgress(70)
+      const uploadResult = await interviewAIAnalysisApi.uploadVideo(createdInterview.id, uploadedFile.file)
+      
+      if (!uploadResult.success) {
+        throw new Error('Failed to upload video: ' + uploadResult.error)
+      }
+
+      setUploadProgress(100)
       setSuccess(true)
       
-      // Call completion callback
+      // Call completion callback with the real interview data
       setTimeout(() => {
-        onUploadComplete?.(interviewData)
+        onUploadComplete?.(createdInterview)
         handleClose()
       }, 1500)
 
     } catch (err) {
-      setError('Upload failed. Please try again.')
+      console.error('Upload error:', err)
+      setError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
       setUploadProgress(0)
     } finally {
       setIsUploading(false)
