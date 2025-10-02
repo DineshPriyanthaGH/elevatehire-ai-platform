@@ -72,10 +72,10 @@ const transformInterviewToUpcoming = (interview: Interview): UpcomingInterview =
     id: interview.id,
     title: interview.title,
     candidate: {
-      id: interview.candidate,
-      full_name: interview.candidate_name,
-      email: interview.candidate_email,
-      phone: interview.candidate_phone,
+      id: interview.candidate.id,
+      full_name: interview.candidate.full_name,
+      email: interview.candidate.email,
+      phone: undefined, // Phone not available in current interview structure
       avatar: undefined
     },
     interviewer: {
@@ -89,8 +89,8 @@ const transformInterviewToUpcoming = (interview: Interview): UpcomingInterview =
     meeting_type: interview.meeting_type,
     priority: interview.priority,
     interview_type: {
-      name: interview.interview_type_name,
-      color: interview.interview_type_color
+      name: interview.interview_type.name,
+      color: interview.interview_type.color
     }
   }
 }
@@ -157,6 +157,8 @@ export default function SchedulingPage() {
   const [showScheduleForm, setShowScheduleForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [upcomingInterviews, setUpcomingInterviews] = useState<UpcomingInterview[]>([])
+  const [allInterviews, setAllInterviews] = useState<UpcomingInterview[]>([]) // Store all interviews for calendar
+  const [filteredInterviews, setFilteredInterviews] = useState<UpcomingInterview[]>([])
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [interviewers, setInterviewers] = useState<Interviewer[]>([])
   const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([
@@ -188,9 +190,35 @@ export default function SchedulingPage() {
 
   useEffect(() => {
     if (selectedDate) {
-      loadInterviewsForDate(selectedDate)
+      filterInterviewsByDate(selectedDate)
+    } else {
+      setFilteredInterviews(upcomingInterviews)
     }
-  }, [selectedDate])
+  }, [selectedDate, allInterviews])
+
+  // Filter interviews by selected date
+  const filterInterviewsByDate = (date: Date) => {
+    const dateString = format(date, 'yyyy-MM-dd')
+    const filtered = allInterviews.filter(interview => {
+      const interviewDate = format(new Date(interview.scheduled_date), 'yyyy-MM-dd')
+      return interviewDate === dateString
+    })
+    setFilteredInterviews(filtered)
+  }
+
+  // Get interview count for a specific date
+  const getInterviewCountForDate = (date: Date): number => {
+    const dateString = format(date, 'yyyy-MM-dd')
+    return allInterviews.filter(interview => {
+      const interviewDate = format(new Date(interview.scheduled_date), 'yyyy-MM-dd')
+      return interviewDate === dateString
+    }).length
+  }
+
+  // Check if a date has interviews
+  const hasInterviewsOnDate = (date: Date): boolean => {
+    return getInterviewCountForDate(date) > 0
+  }
 
   const loadData = async () => {
     try {
@@ -233,42 +261,39 @@ export default function SchedulingPage() {
 
   const loadUpcomingInterviews = async () => {
     try {
+      // Load upcoming interviews (next 30 days for calendar)
       const response = await interviewApi.getAll({
         upcoming: true,
-        page_size: 10
+        page_size: 100 // Get more interviews for calendar display
       })
       
       if (response.data?.results && Array.isArray(response.data.results)) {
         const transformedInterviews = response.data.results.map(transformInterviewToUpcoming)
-        setUpcomingInterviews(transformedInterviews)
+        setAllInterviews(transformedInterviews) // Store all interviews for calendar
+        
+        // Set initial upcoming interviews (limit to 10 for display)
+        setUpcomingInterviews(transformedInterviews.slice(0, 10))
+        
+        // Filter by selected date if one is selected
+        if (selectedDate) {
+          filterInterviewsByDate(selectedDate)
+        } else {
+          setFilteredInterviews(transformedInterviews.slice(0, 10))
+        }
       } else {
+        setAllInterviews([])
         setUpcomingInterviews([])
+        setFilteredInterviews([])
       }
     } catch (error) {
       console.error('Error loading upcoming interviews:', error)
+      setAllInterviews([])
       setUpcomingInterviews([])
+      setFilteredInterviews([])
     }
   }
 
-  const loadInterviewsForDate = async (date: Date) => {
-    try {
-      const startDate = format(date, 'yyyy-MM-dd')
-      const response = await interviewApi.getAll({
-        start_date: startDate,
-        end_date: startDate
-      })
-      
-      if (response.data?.results && Array.isArray(response.data.results)) {
-        const transformedInterviews = response.data.results.map(transformInterviewToUpcoming)
-        setUpcomingInterviews(transformedInterviews)
-      } else {
-        setUpcomingInterviews([])
-      }
-    } catch (error) {
-      console.error('Error loading interviews for date:', error)
-      setUpcomingInterviews([])
-    }
-  }
+
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -296,9 +321,6 @@ export default function SchedulingPage() {
         setShowScheduleForm(false)
         resetForm()
         loadUpcomingInterviews()
-        if (selectedDate) {
-          loadInterviewsForDate(selectedDate)
-        }
       } else {
         throw new Error(result.error || 'Failed to schedule interview')
       }
@@ -337,9 +359,6 @@ export default function SchedulingPage() {
       
       toast(`Interview ${action}d successfully`)
       loadUpcomingInterviews()
-      if (selectedDate) {
-        loadInterviewsForDate(selectedDate)
-      }
     } catch (error) {
       console.error(`Error ${action}ing interview:`, error)
       toast(`Failed to ${action} interview`)
@@ -606,7 +625,49 @@ export default function SchedulingPage() {
               selected={selectedDate} 
               onSelect={setSelectedDate} 
               className="rounded-md border" 
+              modifiers={{
+                hasInterview: (date) => hasInterviewsOnDate(date)
+              }}
+              modifiersStyles={{
+                hasInterview: { 
+                  backgroundColor: '#dbeafe', 
+                  color: '#1d4ed8',
+                  fontWeight: 'bold',
+                  position: 'relative'
+                }
+              }}
             />
+            
+            {/* Calendar Legend */}
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Legend</h4>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2 text-xs">
+                  <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
+                  <span className="text-gray-600">Dates with interviews</span>
+                </div>
+                <div className="flex items-center space-x-2 text-xs">
+                  <div className="w-3 h-3 bg-blue-600 rounded"></div>
+                  <span className="text-gray-600">Selected date</span>
+                </div>
+              </div>
+              
+              {/* Quick stats */}
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="text-center p-2 bg-white rounded border">
+                    <div className="font-semibold text-gray-900">{allInterviews.length}</div>
+                    <div className="text-gray-500">Total</div>
+                  </div>
+                  <div className="text-center p-2 bg-white rounded border">
+                    <div className="font-semibold text-gray-900">
+                      {selectedDate ? getInterviewCountForDate(selectedDate) : upcomingInterviews.length}
+                    </div>
+                    <div className="text-gray-500">{selectedDate ? 'Selected' : 'Upcoming'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -620,14 +681,40 @@ export default function SchedulingPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {upcomingInterviews.length === 0 ? (
+              {/* Show filter info */}
+              {selectedDate && (
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center space-x-2">
+                    <CalendarIcon className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">
+                      Showing interviews for {format(selectedDate, "MMMM d, yyyy")}
+                    </span>
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                      {filteredInterviews.length} interview{filteredInterviews.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setSelectedDate(undefined)}
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                  >
+                    Show All
+                  </Button>
+                </div>
+              )}
+
+              {/* Display interviews */}
+              {(selectedDate ? filteredInterviews : upcomingInterviews).length === 0 ? (
                 <div className="text-center py-8">
                   <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No interviews scheduled</p>
+                  <p className="text-gray-500">
+                    {selectedDate ? `No interviews scheduled for ${format(selectedDate, "MMMM d, yyyy")}` : "No interviews scheduled"}
+                  </p>
                   <p className="text-sm text-gray-400">Click "Schedule Interview" to add one</p>
                 </div>
               ) : (
-                ensureArray(upcomingInterviews).map((interview) => (
+                ensureArray(selectedDate ? filteredInterviews : upcomingInterviews).map((interview) => (
                   <div key={interview.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                     <div className="flex items-center space-x-4">
                       <Avatar className="w-12 h-12">

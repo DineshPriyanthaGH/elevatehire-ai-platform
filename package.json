@@ -1,7 +1,10 @@
 {
   "dependencies": {
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-tabs": "^1.1.13",
     "@types/react-router": "^5.1.20",
     "lucide-react": "^0.526.0",
+    "react-dropzone": "^14.3.8",
     "react-router-dom": "^7.7.1"
   }
 }

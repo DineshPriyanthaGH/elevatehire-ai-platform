@@ -17,3 +17,7 @@ django-filter==23.5
 PyPDF2==3.0.1
 pdfplumber==0.11.7
 python-docx==1.1.2
+
+# AI Analysis dependencies
+google-generativeai==0.7.2
+Pillow==10.4.0

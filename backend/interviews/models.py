@@ -91,6 +91,32 @@ class Interview(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # AI Analysis Integration
+    video_file = models.FileField(upload_to='interview_videos/', blank=True, null=True, help_text="Interview recording for AI analysis")
+    transcript = models.TextField(blank=True, help_text="Interview transcript")
+    ai_analysis_status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ], default='pending', help_text="AI analysis processing status")
+    
+    # AI Analysis Results
+    confidence_score = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Confidence percentage")
+    communication_score = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Communication skills score")
+    technical_score = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Technical skills score")
+    engagement_score = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Engagement level score")
+    
+    ai_keywords = models.JSONField(default=list, blank=True, help_text="Key topics and keywords identified")
+    ai_sentiment = models.CharField(max_length=20, choices=[
+        ('positive', 'Positive'),
+        ('neutral', 'Neutral'),
+        ('negative', 'Negative'),
+    ], blank=True)
+    ai_recommendations = models.JSONField(default=list, blank=True, help_text="AI-generated recommendations")
+    ai_summary = models.TextField(blank=True, help_text="AI-generated interview summary")
+    ai_processed_at = models.DateTimeField(null=True, blank=True)
+    
     # Reminders
     reminder_sent_candidate = models.BooleanField(default=False)
     reminder_sent_interviewer = models.BooleanField(default=False)

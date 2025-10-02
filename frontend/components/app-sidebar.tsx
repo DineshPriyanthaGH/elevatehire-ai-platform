@@ -35,6 +35,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useEffect, useState } from "react"
+import { authApi } from "@/lib/api"
 
 const menuItems = [
   {
@@ -76,6 +78,55 @@ const menuItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const [user, setUser] = useState<any>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    const currentUser = authApi.getCurrentUser()
+    setUser(currentUser)
+  }, [])
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return (
+      <Sidebar>
+        <SidebarHeader className="border-b border-sidebar-border">
+          <div className="flex items-center space-x-2 px-2 py-2">
+            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+              <Brain className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-lg font-bold text-sidebar-foreground">ElevateHire AI</span>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {menuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <Link href={item.url}>
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarRail />
+      </Sidebar>
+    )
+  }
+
+  const handleSignOut = () => {
+    authApi.logout()
+    window.location.href = '/auth'
+  }
 
   return (
     <Sidebar>
@@ -116,11 +167,21 @@ export function AppSidebar() {
                 <SidebarMenuButton className="w-full">
                   <Avatar className="w-6 h-6">
                     <AvatarImage src="/placeholder.svg?height=24&width=24" />
-                    <AvatarFallback>JD</AvatarFallback>
+                    <AvatarFallback>
+                      {user?.first_name?.[0] || user?.username?.[0] || 'U'}
+                      {user?.last_name?.[0] || ''}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col items-start text-left">
-                    <span className="text-sm font-medium">John Doe</span>
-                    <span className="text-xs text-sidebar-foreground/70">HR Manager</span>
+                    <span className="text-sm font-medium">
+                      {user?.first_name && user?.last_name 
+                        ? `${user.first_name} ${user.last_name}`
+                        : user?.username || 'User'
+                      }
+                    </span>
+                    <span className="text-xs text-sidebar-foreground/70">
+                      {user?.email || 'Admin'}
+                    </span>
                   </div>
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
@@ -134,7 +195,7 @@ export function AppSidebar() {
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
+                <DropdownMenuItem className="text-red-600" onClick={handleSignOut}>
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
                 </DropdownMenuItem>

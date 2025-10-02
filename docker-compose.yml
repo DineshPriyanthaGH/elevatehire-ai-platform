@@ -72,7 +72,11 @@ services:
       - db
       - redis
       - backend
-    command: celery -A core worker -l info
+    entrypoint: []
+    command: >
+      sh -c "cd /app && 
+             pip install -r requirements.txt && 
+             celery -A core worker -l info"
 
   # Next.js Frontend
   frontend:
