@@ -916,6 +916,216 @@ export const api = {
   }
 }
 
+// Dashboard interfaces
+export interface DashboardStats {
+  total_interviews: number
+  upcoming_interviews: number  
+  today_interviews: number
+  completed_interviews: number
+  cancelled_interviews: number
+  total_candidates: number
+  recent_candidates: number
+  average_score: number
+  success_rate: number
+  time_saved: number
+}
+
+export interface MonthlyTrend {
+  month: string
+  interviews: number
+  hires: number
+  candidates: number
+}
+
+export interface ScoreDistribution {
+  range: string
+  count: number
+  percentage: number
+}
+
+export interface RecentActivity {
+  interviews: Interview[]
+  candidates: Candidate[]
+}
+
+// Dashboard API
+export const dashboardApi = {
+  // Get overall dashboard statistics
+  async getStats(): Promise<ApiResponse<DashboardStats>> {
+    try {
+      const [interviewsResponse, candidatesResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/interviews/stats/`, {
+          headers: createHeaders(true)
+        }),
+        fetch(`${API_BASE_URL}/candidates/stats/`, {
+          headers: createHeaders(true)
+        })
+      ])
+
+      if (!interviewsResponse.ok || !candidatesResponse.ok) {
+        throw new Error('Failed to fetch dashboard stats')
+      }
+
+      const [interviewStats, candidateStats] = await Promise.all([
+        interviewsResponse.json(),
+        candidatesResponse.json()
+      ])
+
+      // Calculate derived metrics  
+      const averageScore = interviewStats.completed_interviews > 0 
+        ? Math.round((interviewStats.total_score || 0) / interviewStats.completed_interviews)
+        : 0
+
+      const successRate = interviewStats.total_interviews > 0
+        ? Math.round((interviewStats.completed_interviews / interviewStats.total_interviews) * 100)
+        : 0
+
+      const timeSaved = interviewStats.completed_interviews * 2.5 // Assume 2.5 hours saved per AI analysis
+
+      const dashboardStats: DashboardStats = {
+        total_interviews: interviewStats.total_interviews || 0,
+        upcoming_interviews: interviewStats.upcoming_interviews || 0,
+        today_interviews: interviewStats.today_interviews || 0,
+        completed_interviews: interviewStats.completed_interviews || 0,
+        cancelled_interviews: interviewStats.cancelled_interviews || 0,
+        total_candidates: candidateStats.total_candidates || 0,
+        recent_candidates: candidateStats.recent_candidates || 0,
+        average_score: averageScore,
+        success_rate: successRate,
+        time_saved: Math.round(timeSaved)
+      }
+
+      return { success: true, data: dashboardStats }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch stats'
+      }
+    }
+  },
+
+  // Get monthly trends for charts
+  async getMonthlyTrends(): Promise<ApiResponse<MonthlyTrend[]>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/stats/`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch trends')
+      }
+
+      const data = await response.json()
+      const monthlyTrends = data.monthly_trends || {}
+
+      // Convert to chart format
+      const trends: MonthlyTrend[] = Object.entries(monthlyTrends).map(([monthKey, value]: [string, any]) => ({
+        month: new Date(monthKey).toLocaleDateString('en', { month: 'short' }),
+        interviews: value.interviews || 0,
+        hires: value.completed || 0,
+        candidates: value.candidates || 0
+      })).reverse().slice(-6) // Last 6 months
+
+      return { success: true, data: trends }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch trends'
+      }
+    }
+  },
+
+  // Get score distribution for charts
+  async getScoreDistribution(): Promise<ApiResponse<ScoreDistribution[]>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/`, {
+        headers: createHeaders(true),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch score distribution')
+      }
+
+      const data = await response.json()
+      const interviews = data.results || []
+
+      // Calculate score distribution
+      const scoreRanges = {
+        '90-100': 0,
+        '80-89': 0,
+        '70-79': 0,
+        '60-69': 0,
+        '<60': 0
+      }
+
+      let totalScored = 0
+
+      interviews.forEach((interview: any) => {
+        if (interview.confidence_score && interview.communication_score && 
+            interview.technical_score && interview.engagement_score) {
+          const avgScore = (interview.confidence_score + interview.communication_score + 
+                          interview.technical_score + interview.engagement_score) / 4
+          totalScored++
+
+          if (avgScore >= 90) scoreRanges['90-100']++
+          else if (avgScore >= 80) scoreRanges['80-89']++
+          else if (avgScore >= 70) scoreRanges['70-79']++
+          else if (avgScore >= 60) scoreRanges['60-69']++
+          else scoreRanges['<60']++
+        }
+      })
+
+      const distribution: ScoreDistribution[] = Object.entries(scoreRanges).map(([range, count]) => ({
+        range,
+        count,
+        percentage: totalScored > 0 ? Math.round((count / totalScored) * 100) : 0
+      }))
+
+      return { success: true, data: distribution }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch score distribution'
+      }
+    }
+  },
+
+  // Get recent activity
+  async getRecentActivity(): Promise<ApiResponse<RecentActivity>> {
+    try {
+      const [interviewsResponse, candidatesResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/interviews/?ordering=-created_at&limit=5`, {
+          headers: createHeaders(true)
+        }),
+        fetch(`${API_BASE_URL}/candidates/?ordering=-created_at&limit=5`, {
+          headers: createHeaders(true)
+        })
+      ])
+
+      if (!interviewsResponse.ok || !candidatesResponse.ok) {
+        throw new Error('Failed to fetch recent activity')
+      }
+
+      const [interviewsData, candidatesData] = await Promise.all([
+        interviewsResponse.json(),
+        candidatesResponse.json()
+      ])
+
+      const activity: RecentActivity = {
+        interviews: interviewsData.results || [],
+        candidates: candidatesData.results || []
+      }
+
+      return { success: true, data: activity }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch recent activity'
+      }
+    }
+  }
+}
+
 // Video Interview interfaces
 export interface VideoInterview {
   id: string

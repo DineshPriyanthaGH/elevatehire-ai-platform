@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Users,
   Calendar,
@@ -18,8 +19,14 @@ import {
   Brain,
   CheckCircle,
   AlertCircle,
+  RefreshCw,
+  Plus,
+  Eye,
+  FileText,
+  Activity
 } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts"
+import { dashboardApi, DashboardStats, MonthlyTrend, ScoreDistribution, RecentActivity } from "@/lib/api"
 
 // User type definition
 interface User {
@@ -30,65 +37,52 @@ interface User {
   username?: string
 }
 
-const monthlyData = [
-  { month: "Jan", interviews: 45, hires: 12 },
-  { month: "Feb", interviews: 52, hires: 15 },
-  { month: "Mar", interviews: 48, hires: 11 },
-  { month: "Apr", interviews: 61, hires: 18 },
-  { month: "May", interviews: 55, hires: 16 },
-  { month: "Jun", interviews: 67, hires: 22 },
-]
-
-const scoreDistribution = [
-  { range: "90-100", count: 15, color: "#10b981" },
-  { range: "80-89", count: 28, color: "#3b82f6" },
-  { range: "70-79", count: 35, color: "#f59e0b" },
-  { range: "60-69", count: 18, color: "#ef4444" },
-  { range: "<60", count: 8, color: "#6b7280" },
-]
-
-const recentInterviews = [
-  {
-    id: 1,
-    candidate: "Sarah Johnson",
-    position: "Senior Developer",
-    score: 92,
-    status: "completed",
-    date: "2024-01-15",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 2,
-    candidate: "Michael Chen",
-    position: "Product Manager",
-    score: 88,
-    status: "completed",
-    date: "2024-01-14",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 3,
-    candidate: "Emily Rodriguez",
-    position: "UX Designer",
-    score: 95,
-    status: "completed",
-    date: "2024-01-14",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 4,
-    candidate: "David Kim",
-    position: "Data Scientist",
-    score: 85,
-    status: "scheduled",
-    date: "2024-01-16",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-]
-
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  
+  // Dashboard data state
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>([])
+  const [scoreDistribution, setScoreDistribution] = useState<ScoreDistribution[]>([])
+  const [recentActivity, setRecentActivity] = useState<RecentActivity | null>(null)
+  
   const router = useRouter()
+
+  // Load dashboard data
+  const loadDashboardData = async () => {
+    try {
+      setDataLoading(true)
+      setError(null)
+      
+      const [statsResult, trendsResult, distributionResult, activityResult] = await Promise.all([
+        dashboardApi.getStats(),
+        dashboardApi.getMonthlyTrends(),
+        dashboardApi.getScoreDistribution(),
+        dashboardApi.getRecentActivity()
+      ])
+      
+      if (statsResult.success && statsResult.data) setStats(statsResult.data)
+      if (trendsResult.success && trendsResult.data) setMonthlyTrends(trendsResult.data)
+      if (distributionResult.success && distributionResult.data) setScoreDistribution(distributionResult.data)
+      if (activityResult.success && activityResult.data) setRecentActivity(activityResult.data)
+    } catch (error) {
+      console.error("Error loading dashboard data:", error)
+      setError("Failed to load dashboard data. Please try again.")
+    } finally {
+      setDataLoading(false)
+    }
+  }
+
+  // Refresh data handler
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await loadDashboardData()
+    setRefreshing(false)
+  }
 
   useEffect(() => {
     // Check authentication
@@ -102,6 +96,9 @@ export default function DashboardPage() {
     
     if (userData) {
       setUser(JSON.parse(userData))
+      setLoading(false)
+      // Load dashboard data after user is set
+      loadDashboardData()
     }
   }, [router])
 
@@ -135,6 +132,15 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Button variant="outline">
             <Upload className="w-4 h-4 mr-2" />
             Upload Interview
@@ -149,67 +155,97 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-500" />
+          <AlertDescription className="text-red-700">
+            {error}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {dataLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="border-0 shadow-lg bg-slate-100">
+              <CardHeader className="animate-pulse">
+                <div className="h-4 bg-slate-300 rounded w-3/4"></div>
+              </CardHeader>
+              <CardContent className="animate-pulse">
+                <div className="h-8 bg-slate-300 rounded w-1/2 mb-2"></div>
+                <div className="h-3 bg-slate-300 rounded w-full"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-lg bg-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-700">Total Interviews</CardTitle>
-            <Users className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">328</div>
-            <div className="flex items-center text-xs text-slate-600">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              <span>+12% from last month</span>
-            </div>
-          </CardContent>
-        </Card>
+      {!dataLoading && stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="border-0 shadow-lg bg-slate-100">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-700">Total Interviews</CardTitle>
+              <Users className="h-4 w-4 text-slate-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">{stats.total_interviews}</div>
+              <div className="flex items-center text-xs text-slate-600">
+                <Activity className="w-3 h-3 mr-1 text-blue-600" />
+                <span className="text-blue-600">{stats.upcoming_interviews} upcoming</span>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="border-0 shadow-lg bg-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-700">Average Score</CardTitle>
-            <Star className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">84.2</div>
-            <div className="flex items-center text-xs text-slate-600">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              <span>+3.2 points</span>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="border-0 shadow-lg bg-slate-100">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-700">Average Score</CardTitle>
+              <Star className="h-4 w-4 text-slate-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">{stats.average_score.toFixed(1)}</div>
+              <div className="flex items-center text-xs text-slate-600">
+                <Star className="w-3 h-3 mr-1 text-yellow-600" />
+                <span className="text-yellow-600">{stats.success_rate.toFixed(1)}% success rate</span>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="border-0 shadow-lg bg-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-700">Success Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">68%</div>
-            <div className="flex items-center text-xs text-slate-600">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              <span>+5% improvement</span>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="border-0 shadow-lg bg-slate-100">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-700">Total Candidates</CardTitle>
+              <TrendingUp className="h-4 w-4 text-slate-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">{stats.total_candidates}</div>
+              <div className="flex items-center text-xs text-slate-600">
+                <Users className="w-3 h-3 mr-1 text-green-600" />
+                <span className="text-green-600">{stats.recent_candidates} recent candidates</span>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="border-0 shadow-lg bg-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-700">Time Saved</CardTitle>
-            <Clock className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">156h</div>
-            <div className="flex items-center text-xs text-slate-600">
-              <ArrowUpRight className="w-3 h-3 mr-1" />
-              <span>This month</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="border-0 shadow-lg bg-slate-100">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-700">Time Saved</CardTitle>
+              <Clock className="h-4 w-4 text-slate-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">{stats.time_saved}h</div>
+              <div className="flex items-center text-xs text-slate-600">
+                <CheckCircle className="w-3 h-3 mr-1 text-green-600" />
+                <span className="text-green-600">This month</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {!dataLoading && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -220,7 +256,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyData}>
+              <LineChart data={monthlyTrends}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -252,9 +288,11 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
+      {!dataLoading && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 border-0 shadow-lg">
           <CardHeader>
@@ -263,45 +301,45 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentInterviews.map((interview) => (
+              {recentActivity?.interviews.slice(0, 3).map((interview) => (
                 <div key={interview.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                   <div className="flex items-center space-x-4">
-                    <img
-                      src={interview.avatar || "/placeholder.svg"}
-                      alt={interview.candidate}
-                      className="w-10 h-10 rounded-full"
-                    />
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-blue-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-slate-900">{interview.candidate}</p>
-                      <p className="text-sm text-slate-600">{interview.position}</p>
+                      <p className="font-medium text-slate-900">Interview with {interview.candidate.full_name}</p>
+                      <p className="text-sm text-slate-600">{interview.title}</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
                     <div className="text-right">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg font-bold text-slate-900">{interview.score}</span>
-                        <Badge
-                          variant={interview.score >= 90 ? "default" : interview.score >= 80 ? "secondary" : "outline"}
-                          className={
-                            interview.score >= 90
-                              ? "bg-green-100 text-green-700"
-                              : interview.score >= 80
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-orange-100 text-orange-700"
-                          }
-                        >
-                          {interview.score >= 90 ? "Excellent" : interview.score >= 80 ? "Good" : "Average"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-500">{interview.date}</p>
+                      <p className="text-xs text-slate-500">{new Date(interview.scheduled_date).toLocaleDateString()}</p>
                     </div>
-                    <div className="flex items-center">
-                      {interview.status === "completed" ? (
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      ) : (
-                        <AlertCircle className="w-5 h-5 text-orange-500" />
-                      )}
+                    <Badge variant={interview.status === "completed" ? "default" : "secondary"}>
+                      {interview.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+              {recentActivity?.candidates.slice(0, 2).map((candidate) => (
+                <div key={candidate.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-green-600" />
                     </div>
+                    <div>
+                      <p className="font-medium text-slate-900">{candidate.first_name} {candidate.last_name}</p>
+                      <p className="text-sm text-slate-600">{candidate.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500">{new Date(candidate.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <Badge variant="outline">
+                      candidate
+                    </Badge>
                   </div>
                 </div>
               ))}
@@ -352,6 +390,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   )
 }
