@@ -329,7 +329,7 @@ export default function DashboardPage() {
                       <Users className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-slate-900">{candidate.first_name} {candidate.last_name}</p>
+                      <p className="font-medium text-slate-900">{candidate.full_name}</p>
                       <p className="text-sm text-slate-600">{candidate.email}</p>
                     </div>
                   </div>
