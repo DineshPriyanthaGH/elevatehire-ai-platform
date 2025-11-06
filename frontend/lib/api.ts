@@ -948,6 +948,35 @@ export interface RecentActivity {
   candidates: Candidate[]
 }
 
+export interface HistoryFilters {
+  search?: string
+  status?: string
+  department?: string
+  dateRange?: string
+  interviewer?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface HistoryResponse {
+  results: Interview[]
+  count: number
+  next: string | null
+  previous: string | null
+}
+
+export interface HistoryStats {
+  total_interviews: number
+  hired_count: number
+  rejected_count: number
+  pending_count: number
+  success_rate: number
+  average_score: number
+  total_candidates: number
+  this_month_interviews: number
+  last_month_interviews: number
+}
+
 // Dashboard API
 export const dashboardApi = {
   // Get overall dashboard statistics
@@ -1347,6 +1376,166 @@ export const interviewAIAnalysisApi = {
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Download failed' 
+      }
+    }
+  }
+}
+
+// History API
+export const historyApi = {
+  // Get interview history with filters and pagination
+  async getInterviewHistory(filters: HistoryFilters = {}): Promise<ApiResponse<HistoryResponse>> {
+    try {
+      const params = new URLSearchParams()
+      
+      if (filters.search) params.append('search', filters.search)
+      if (filters.status) params.append('status', filters.status)
+      if (filters.interviewer) params.append('interviewer', filters.interviewer)
+      if (filters.page) params.append('page', filters.page.toString())
+      if (filters.pageSize) params.append('page_size', filters.pageSize.toString())
+      
+      // Add date range filter
+      if (filters.dateRange) {
+        const now = new Date()
+        let startDate: Date
+        
+        switch (filters.dateRange) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            params.append('scheduled_date__gte', startDate.toISOString().split('T')[0])
+            break
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+            params.append('scheduled_date__gte', startDate.toISOString().split('T')[0])
+            break
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+            params.append('scheduled_date__gte', startDate.toISOString().split('T')[0])
+            break
+          case 'quarter':
+            startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+            params.append('scheduled_date__gte', startDate.toISOString().split('T')[0])
+            break
+          case 'year':
+            startDate = new Date(now.getFullYear(), 0, 1)
+            params.append('scheduled_date__gte', startDate.toISOString().split('T')[0])
+            break
+        }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/interviews/?${params.toString()}`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interview history')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching interview history:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get history statistics
+  async getHistoryStats(): Promise<ApiResponse<HistoryStats>> {
+    try {
+      const [interviewStatsResponse, candidatesResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/interviews/stats/`, {
+          headers: createHeaders(true)
+        }),
+        fetch(`${API_BASE_URL}/candidates/stats/`, {
+          headers: createHeaders(true)
+        })
+      ])
+
+      if (!interviewStatsResponse.ok || !candidatesResponse.ok) {
+        throw new Error('Failed to fetch history statistics')
+      }
+
+      const [interviewStats, candidateStats] = await Promise.all([
+        interviewStatsResponse.json(),
+        candidatesResponse.json()
+      ])
+
+      // Calculate derived statistics
+      const totalInterviews = interviewStats.total_interviews || 0
+      const hiredCount = interviewStats.completed_interviews || 0
+      const successRate = totalInterviews > 0 ? (hiredCount / totalInterviews) * 100 : 0
+
+      const historyStats: HistoryStats = {
+        total_interviews: totalInterviews,
+        hired_count: hiredCount,
+        rejected_count: interviewStats.cancelled_interviews || 0,
+        pending_count: interviewStats.upcoming_interviews || 0,
+        success_rate: successRate,
+        average_score: interviewStats.average_score || 0,
+        total_candidates: candidateStats.total_candidates || 0,
+        this_month_interviews: interviewStats.today_interviews || 0,
+        last_month_interviews: Math.max(0, totalInterviews - (interviewStats.today_interviews || 0))
+      }
+
+      return { success: true, data: historyStats }
+    } catch (error) {
+      console.error('Error fetching history stats:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Get interview details by ID
+  async getInterviewDetails(id: string): Promise<ApiResponse<Interview>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/interviews/${id}/`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch interview details')
+      }
+
+      const data = await response.json()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error fetching interview details:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  },
+
+  // Export history data
+  async exportHistory(filters: HistoryFilters = {}): Promise<ApiResponse<Blob>> {
+    try {
+      const params = new URLSearchParams()
+      
+      if (filters.search) params.append('search', filters.search)
+      if (filters.status) params.append('status', filters.status)
+      if (filters.dateRange) params.append('date_range', filters.dateRange)
+
+      const response = await fetch(`${API_BASE_URL}/interviews/export/?${params.toString()}`, {
+        headers: createHeaders(true)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to export history')
+      }
+
+      const blob = await response.blob()
+      return { success: true, data: blob }
+    } catch (error) {
+      console.error('Error exporting history:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
       }
     }
   }
