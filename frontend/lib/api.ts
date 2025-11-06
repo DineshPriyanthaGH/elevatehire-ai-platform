@@ -979,7 +979,7 @@ export interface HistoryStats {
 
 // Dashboard API
 export const dashboardApi = {
-  // Get overall dashboard statistics
+ 
   async getStats(): Promise<ApiResponse<DashboardStats>> {
     try {
       const [interviewsResponse, candidatesResponse] = await Promise.all([
@@ -999,8 +999,7 @@ export const dashboardApi = {
         interviewsResponse.json(),
         candidatesResponse.json()
       ])
-
-      // Calculate derived metrics  
+ 
       const averageScore = interviewStats.completed_interviews > 0 
         ? Math.round((interviewStats.total_score || 0) / interviewStats.completed_interviews)
         : 0
@@ -1033,7 +1032,7 @@ export const dashboardApi = {
     }
   },
 
-  // Get monthly trends for charts
+
   async getMonthlyTrends(): Promise<ApiResponse<MonthlyTrend[]>> {
     try {
       const response = await fetch(`${API_BASE_URL}/interviews/stats/`, {
